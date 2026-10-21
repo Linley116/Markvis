@@ -1,0 +1,14 @@
+# build output (build.sh installs to ~/Applications and removes this)
+build/
+*.app
+
+# macOS
+.DS_Store
+
+# test artifacts
+*.pdf
+!docs/*.pdf
+
+# editor
+.vscode/
+.idea/

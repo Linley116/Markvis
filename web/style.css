@@ -1,0 +1,680 @@
+:root {
+  --bg: #ffffff;
+  --fg: #26272b;
+  --muted: #9aa0a6;
+  --accent: #4183c4;
+  --mark: #c8ccd2;
+  --code-bg: #f6f7f9;
+  --border: #e8eaed;
+  --quote: #dfe2e6;
+
+  --focus-dim: .26;
+  --panel-shadow: 0 8px 28px rgba(0, 0, 0, .13);
+
+  /* 代码高亮 */
+  --hl-keyword: #d73a49;
+  --hl-string: #032f62;
+  --hl-comment: #6a737d;
+  --hl-number: #005cc5;
+  --hl-title: #6f42c1;
+  --hl-builtin: #e36209;
+  --hl-tag: #22863a;
+}
+
+[data-theme="dark"] {
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-comment: #8b949e;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-builtin: #ffa657;
+  --hl-tag: #7ee787;
+}
+
+[data-theme="nord"] {
+  --hl-keyword: #81a1c1;
+  --hl-string: #a3be8c;
+  --hl-comment: #616e88;
+  --hl-number: #b48ead;
+  --hl-title: #88c0d0;
+  --hl-builtin: #d08770;
+  --hl-tag: #8fbcbb;
+}
+
+[data-theme="sepia"] {
+  --hl-keyword: #a0522d;
+  --hl-string: #6b7a3a;
+  --hl-comment: #9c8f7c;
+  --hl-number: #8b5e3c;
+  --hl-title: #7b5ea7;
+  --hl-builtin: #b5651d;
+  --hl-tag: #4a7c59;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --hl-keyword: #ff7b72;
+    --hl-string: #a5d6ff;
+    --hl-comment: #8b949e;
+    --hl-number: #79c0ff;
+    --hl-title: #d2a8ff;
+    --hl-builtin: #ffa657;
+    --hl-tag: #7ee787;
+  }
+}
+
+/* 跟随系统（未显式指定主题时生效） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #1e2126;
+    --fg: #d6d9de;
+    --muted: #7f858e;
+    --accent: #6fb3e0;
+    --mark: #5c626c;
+    --code-bg: #262a30;
+    --border: #333840;
+    --quote: #3a4048;
+  }
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #26272b;
+  --muted: #9aa0a6;
+  --accent: #4183c4;
+  --mark: #c8ccd2;
+  --code-bg: #f6f7f9;
+  --border: #e8eaed;
+  --quote: #dfe2e6;
+}
+
+[data-theme="dark"] {
+  --bg: #1e2126;
+  --fg: #d6d9de;
+  --muted: #7f858e;
+  --accent: #6fb3e0;
+  --mark: #5c626c;
+  --code-bg: #262a30;
+  --border: #333840;
+  --quote: #3a4048;
+}
+
+[data-theme="sepia"] {
+  --bg: #f7f1e3;
+  --fg: #4a4238;
+  --muted: #9c8f7c;
+  --accent: #a06a32;
+  --mark: #c9b99f;
+  --code-bg: #efe6d5;
+  --border: #e2d7c3;
+  --quote: #d8c9b2;
+}
+
+[data-theme="nord"] {
+  --bg: #2e3440;
+  --fg: #d8dee9;
+  --muted: #8b96a5;
+  --accent: #88c0d0;
+  --mark: #616e88;
+  --code-bg: #3b4252;
+  --border: #434c5e;
+  --quote: #4c566a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+#scroll {
+  height: calc(100% - 30px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#write, #source {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 48px 40vh;
+  outline: none;
+  caret-color: var(--accent);
+}
+
+#source {
+  display: none;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  resize: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  padding-top: 48px;
+}
+
+/* ---------- 块级 ---------- */
+
+.md-block { margin: 0 0 1em; }
+
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.35;
+  margin: 1.6em 0 .7em;
+  font-weight: 600;
+}
+h1 { font-size: 1.9em; margin-top: 1em; }
+h2 { font-size: 1.5em; }
+h3 { font-size: 1.25em; }
+h4, h5, h6 { font-size: 1.05em; }
+
+h1, h2 { border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+
+p { margin: 0 0 1em; }
+
+blockquote {
+  margin: 0 0 1em;
+  padding: 0 1em;
+  border-left: 4px solid var(--quote);
+  color: var(--muted);
+}
+blockquote p { margin: 0; }
+
+ul, ol { margin: 0 0 1em; padding-left: 1.6em; }
+li { margin: .2em 0; }
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+pre.md-fences {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 14px 18px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+pre.md-fences code {
+  font-family: "SF Mono", Menlo, monospace;
+  white-space: pre;
+  background: none;
+  padding: 0;
+}
+
+/* highlight.js token 配色，跟随主题变量 */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag { color: var(--hl-keyword); }
+
+.hljs-string,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-bullet { color: var(--hl-string); }
+
+.hljs-comment,
+.hljs-quote { color: var(--hl-comment); font-style: italic; }
+
+.hljs-number,
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable { color: var(--hl-number); }
+
+.hljs-title,
+.hljs-section { color: var(--hl-title); }
+
+.hljs-built_in,
+.hljs-type,
+.hljs-params { color: var(--hl-builtin); }
+
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class { color: var(--hl-tag); }
+
+.hljs-meta { color: var(--hl-comment); }
+.hljs-strong { font-weight: 600; }
+.hljs-emphasis { font-style: italic; }
+
+/* ---------- 表格 ---------- */
+
+table.md-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 1.2em;
+  font-size: .94em;
+  table-layout: auto;
+}
+
+.md-table th,
+.md-table td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  vertical-align: top;
+  min-width: 6em;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.md-table th {
+  background: var(--code-bg);
+  font-weight: 600;
+}
+
+.md-table td:focus,
+.md-table th:focus {
+  outline: 2px solid rgba(65, 131, 196, .35);
+  outline-offset: -2px;
+}
+
+.md-table tr:hover td { background: rgba(127, 127, 127, .03); }
+
+/* ---------- YAML front matter ---------- */
+
+pre.md-meta {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  background: var(--code-bg);
+  border-left: 3px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 14px;
+  margin: 0 0 1.6em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------- 行内 ---------- */
+
+code {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: .88em;
+  background: var(--code-bg);
+  border-radius: 3px;
+  padding: .12em .35em;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.md-img {
+  max-width: 100%;
+  border-radius: 4px;
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+/* 标记符：默认隐藏，光标进入时（.md-expand）显现 —— 对应 Typora 的 expand 行为 */
+.md-inline[data-open]::before,
+.md-inline[data-close]::after {
+  color: var(--mark);
+  display: none;
+  font-weight: 400;
+  font-style: normal;
+  white-space: pre;
+}
+.md-inline[data-open]::before { content: attr(data-open); }
+.md-inline[data-close]::after { content: attr(data-close); }
+
+.md-inline.md-expand[data-open]::before,
+.md-inline.md-expand[data-close]::after { display: inline; }
+
+.md-inline.md-expand { background: rgba(65,131,196,.06); border-radius: 2px; }
+
+/* ---------- 状态栏 ---------- */
+
+#status {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  user-select: none;
+}
+
+#status .pill {
+  background: var(--code-bg);
+  border-radius: 10px;
+  padding: 1px 9px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+#hint { margin-left: auto; opacity: .75; }
+
+::selection { background: rgba(65,131,196,.22); }
+
+/* ---------- 大纲侧栏 ---------- */
+
+#mf-outline {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 30px;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  transition: transform .18s ease;
+  z-index: 20;
+}
+
+body.mf-outline-open #mf-outline { transform: none; }
+
+body.mf-outline-open #scroll {
+  margin-left: 240px;
+}
+
+#scroll { transition: margin-left .18s ease; }
+
+.mf-outline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  user-select: none;
+}
+
+.mf-outline-head button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.mf-outline-head button:hover { background: var(--code-bg); color: var(--fg); }
+
+#mf-outline-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 24px;
+}
+
+.mf-outline-item {
+  display: block;
+  padding: 4px 8px;
+  margin: 1px 0;
+  border-radius: 4px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+}
+
+.mf-outline-item:hover { background: var(--code-bg); }
+
+.mf-outline-item.mf-active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--code-bg);
+  font-weight: 500;
+}
+
+.mf-outline-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- 查找替换 ---------- */
+
+#mf-search {
+  position: fixed;
+  top: 10px;
+  right: 14px;
+  z-index: 30;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--panel-shadow);
+  font-size: 12.5px;
+}
+
+#mf-search.mf-show { display: flex; }
+
+.mf-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#mf-search input[type="text"] {
+  flex: 1;
+  min-width: 150px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  color: var(--fg);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  outline: none;
+}
+
+#mf-search input[type="text"]:focus { border-color: var(--accent); }
+
+#mf-search button {
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#mf-search button:hover { border-color: var(--accent); color: var(--accent); }
+
+#mf-count {
+  font-size: 11.5px;
+  color: var(--muted);
+  min-width: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#mf-case {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+::highlight(mf-search) { background-color: rgba(255, 214, 0, .40); }
+::highlight(mf-current) { background-color: rgba(255, 140, 0, .58); }
+
+/* ---------- 专注模式 ---------- */
+
+body.mf-focus #write > .md-block {
+  opacity: var(--focus-dim);
+  transition: opacity .2s ease;
+}
+
+body.mf-focus #write > .md-block.mf-focus-current {
+  opacity: 1;
+}
+
+/* ---------- 状态栏按钮 ---------- */
+
+#status button.mf-chip {
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--muted);
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+#status button.mf-chip:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- 导出 / 打印 ---------- */
+
+body.mf-export #status,
+body.mf-export #mf-outline,
+body.mf-export #mf-search {
+  display: none !important;
+}
+
+/* 导出时不留光标和零宽锚点的痕迹 */
+body.mf-export,
+body.mf-export #write { caret-color: transparent !important; }
+body.mf-export .mf-anchor { display: none !important; }
+
+body.mf-export #scroll {
+  margin-left: 0 !important;
+  /* 导出时必须完全展开：createPDF 只渲染可视区域，滚动容器会导致空白页 */
+  height: auto !important;
+  overflow: visible !important;
+}
+
+body.mf-export #write {
+  padding-bottom: 40px !important;
+}
+
+/* 导出时禁用横向滚动：代码块必须折行，否则右侧被裁掉。
+   注意这条规则必须与导出页（__printShellHTML）里的完全一致，
+   否则分页测量到的高度会小于实际渲染高度，导致页尾内容被裁。 */
+body.mf-export pre.md-fences,
+body.mf-export pre.md-fences code {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body.mf-export pre.md-fences { overflow-x: hidden !important; }
+
+/* 导出字体与 Typora 保持一致（PingFang SC）。
+   注意：PingFang 的 PDF ToUnicode 会把部分汉字映射成康熙部首
+   （「文档」→「⽂档」），复制粘贴会有偏差 —— Typora 导出的 PDF 也一样。
+   换来的是字体子集小：Hiragino 每页会嵌入完整字体，12 页能到 12MB，
+   PingFang 只有 ~1MB。测量与渲染必须用同一字体，否则分页高度会有偏差。 */
+body.mf-export,
+body.mf-export #write {
+  font-family: "PingFang SC", "Hiragino Sans GB", sans-serif !important;
+}
+
+/* 打印字号对齐 Typora 导出的 A4 版式：正文 9.1pt、左右边距 13mm。
+   页面坐标是 794×1123 px，映射到 595×842 pt（倍率 0.749），
+   所以 12.2px ≈ 9.1pt。这里的数值必须和 __printShellHTML 的页盒一致。 */
+body.mf-export {
+  font-size: 12.2px !important;
+  line-height: 1.55 !important;
+}
+
+/* YAML front matter 是元数据，导出时和 Typora 一样不渲染 */
+body.mf-export pre.md-meta { display: none !important; }
+
+/* 导出不画标题下划线，跟 Typora 的 PDF 一致（编辑器里仍保留） */
+body.mf-export h1,
+body.mf-export h2 {
+  border-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+body.mf-export h1 { font-size: 1.95em; }
+body.mf-export h2 { font-size: 1.45em; }
+body.mf-export h3 { font-size: 1.2em; }
+
+@media print {
+  /* 打印一律浅色，避免深色主题打出黑底 */
+  :root,
+  [data-theme] {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #666666;
+    --accent: #1a5fb4;
+    --mark: #999999;
+    --code-bg: #f5f5f5;
+    --border: #dddddd;
+    --quote: #dddddd;
+  }
+
+  html, body {
+    background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  #status, #mf-outline, #mf-search { display: none !important; }
+  body.mf-outline-open #scroll { margin-left: 0 !important; }
+  #scroll { height: auto !important; overflow: visible !important; }
+  #write { max-width: none !important; padding: 0 !important; }
+
+  .md-inline[data-open]::before,
+  .md-inline[data-close]::after { display: none !important; }
+  .md-inline.md-expand { background: none !important; }
+  .mf-anchor { display: none !important; }
+
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; page-break-after: avoid; }
+  pre, table, blockquote { break-inside: avoid; page-break-inside: avoid; }
+
+  a { color: inherit !important; text-decoration: none !important; }
+
+  @page { margin: 18mm 16mm; }
+}
+
+/* ---------- 分页（PDF 导出用） ---------- */
+
+#mf-stage { position: absolute; left: -100000px; top: 0; visibility: hidden; }
+
+.mf-page {
+  overflow: hidden;
+  background: #fff;
+  color: var(--fg);
+}
+
+/* 页首块不留上边距，避免每页顶部出现空白带 */
+.mf-page > :first-child { margin-top: 0 !important; }
+
+/* 导出的独立 HTML */
+.mf-export-standalone #scroll { height: auto; overflow: visible; }
+.mf-export-standalone #write { padding: 40px 24px 80px; }
+.mf-export-standalone .mf-anchor { display: none; }
+

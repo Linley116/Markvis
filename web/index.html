@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarkFrame</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="scroll">
+  <article id="write" contenteditable="true" spellcheck="false"></article>
+  <textarea id="source" spellcheck="false" style="display:none"></textarea>
+</main>
+<div id="status">
+  <span id="mode" class="pill">Live</span>
+  <span id="wordcount">0 字</span>
+  <button id="mf-theme-btn" class="mf-chip">跟随系统</button>
+  <span id="hint">Cmd+/ 源码 · Cmd+F 查找 · Cmd+Shift+O 大纲</span>
+</div>
+<script src="vendor/highlight.min.js"></script>
+<script src="engine.js"></script>
+<script src="features/outline.js"></script>
+<script src="features/search.js"></script>
+<script src="features/focus.js"></script>
+<script src="features/theme.js"></script>
+<script src="features/autosave.js"></script>
+</body>
+</html>

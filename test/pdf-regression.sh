@@ -1,0 +1,55 @@
+#!/bin/zsh
+# PDF 导出回归：分页结构 + 内容完整性
+#
+# 这份脚本守的是两个真实 bug：
+#   1. 页数、体积都正常，但除第 1 页外全是空白（createPDF 只渲染可视区域）
+#   2. 长表格 / 长代码块在页尾被裁掉（分页测量与实际渲染的换行规则不一致）
+# 所以测试文档必须同时包含长表格和长代码块。
+set -e
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+APP="$HOME/Applications/MarkFrame.app/Contents/MacOS/MarkFrame"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+if [[ ! -x "$APP" ]]; then
+  echo "未安装：$APP（先跑 ./build.sh）"
+  exit 2
+fi
+
+python3 - "$TMP/doc.md" <<'PY'
+import sys
+parts = ['# PDF 回归测试', '', '用于验证分页、表格拆页与代码块折行。', '']
+
+# 长表格：跨多页，续页需重复表头
+parts += ['## 长表格', '', '| 序号 | 类别 | 说明 | 角色 |', '|---:|---|---|---|']
+for i in range(1, 61):
+    parts.append(f'| {i} | 检查项 {i} | 这是第 {i} 行的说明文字，长度足够占据一行以上，用来把表格撑到多页。 | 设计顾问自查 |')
+parts.append('')
+
+# 长代码块：必须折行，且跨页时不能丢行
+parts += ['## 长代码块', '', '```css']
+for i in range(1, 81):
+    parts.append(f'.rule-{i} {{ margin: 0 0 {i}px; padding: {i}px 12px; border-left: 3px solid #ccc; color: #333; }}')
+parts.append('```')
+parts.append('')
+
+# 正文末段：用来验证页尾没有被裁
+parts += ['## 结尾', '', 'END-OF-DOCUMENT-MARKER 这一段必须完整出现在 PDF 的最后一页，否则说明导出被截断。', '']
+
+open(sys.argv[1], 'w').write('\n'.join(parts))
+PY
+
+pkill -f "MarkFrame.app/Contents/MacOS/MarkFrame" 2>/dev/null || true
+sleep 1
+
+echo "==> 导出中…"
+MARKFRAME_EXPORT_PDF="$TMP/out.pdf" "$APP" "$TMP/doc.md" >/dev/null 2>&1 &
+sleep 14
+
+if [[ ! -f "$TMP/out.pdf" ]]; then
+  echo "FAIL: 没有生成 PDF"
+  exit 1
+fi
+
+swift "$ROOT/test/pdfcheck.swift" "$TMP/out.pdf" "$TMP/doc.md"
