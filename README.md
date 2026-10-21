@@ -164,7 +164,7 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Short version: nested blocks, a unified undo stack, math + Mermaid, multi-tab, incremental save protocol.
+See [ROADMAP.md](ROADMAP.md) — completed work is struck through, so what is left is what is not crossed out. Short version: multi-document, editable inline markers, footnotes/TOC, math + Mermaid, unified undo stack, nested blocks.
 
 ### License
 
@@ -320,7 +320,7 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 路线图
 
-见 [ROADMAP.md](ROADMAP.md)。简版：嵌套块、统一撤销栈、数学公式与 Mermaid、多标签页、增量落盘协议。
+见 [ROADMAP.md](ROADMAP.md) —— 已完成项用删除线划掉，没划掉的就是待办。简版：多文档、行内标记可编辑、脚注/TOC、数学与 Mermaid、统一撤销栈、嵌套块。
 
 ### 许可证
 
