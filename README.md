@@ -7,7 +7,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-71%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-87%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](#english) · [简体中文](#简体中文)
@@ -36,25 +36,26 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~5,000 lines: 1,000 Swift, 2,900 web core, 500 features, 600 tests.
+The whole editor is ~5,600 lines: 1,200 Swift, 3,000 web core, 500 features, 800 tests.
 
 ### Features
 
 | Area | What works |
 |---|---|
-| **Editing** | Paragraphs, H1–H6, quotes, ordered/unordered lists, fenced code, tables, horizontal rules, YAML front matter |
-| **Inline** | Bold, italic, inline code, strikethrough, links, images |
+| **Editing** | Paragraphs, H1–H6, quotes, ordered/unordered lists, fenced code, tables, horizontal rules, YAML front matter, GFM soft/hard line breaks |
+| **Inline** | Bold, italic, inline code, strikethrough, links, images, bracket/quote auto-pairing |
 | **Live preview** | Lossless DOM: every inline element remembers its source markers, so Markdown is reconstructed from the DOM, not from a shadow buffer |
 | **200 ms brush** | Only dirty blocks get re-rendered; identical HTML means zero DOM writes |
 | **`expand`** | Move the caret into `**bold**` and the markers float back into view |
 | **Source mode** | `Cmd+/` round-trips between rendered and raw text |
+| **Multi-document** | One document per window, native macOS tab groups (`Cmd+T`), opening a file never clobbers the current one |
 | **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-aware column widths |
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
 | **Outline** | `Cmd+Shift+O`, heading tree with current-section tracking |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
 | **Files** | Double-click `.md`, drag to window, Open Recent, CLI argument, autosave, close confirmation |
-| **Export** | Paginated A4 PDF, self-contained HTML, code highlighting, pasted images saved to `assets/` |
+| **Export** | Paginated A4 PDF, self-contained HTML (local images inlined as data URLs), code highlighting, pasted images saved to `assets/` |
 
 ### Architecture
 
@@ -131,7 +132,8 @@ To keep the build artifact for distribution:
 
 | Action | Shortcut |
 |---|---|
-| New / Open / Save / Save As | `Cmd+N` / `Cmd+O` / `Cmd+S` / `Shift+Cmd+S` |
+| New / New tab / Open / Save | `Cmd+N` / `Cmd+T` / `Cmd+O` / `Cmd+S` |
+| Hard line break | `Shift+Enter` (or two trailing spaces / `\`, per GFM) |
 | Export PDF / HTML | File → Export |
 | Bold / Italic / Inline code | `Cmd+B` / `Cmd+I` / `Cmd+K` |
 | Toggle source mode | `Cmd+/` |
@@ -144,7 +146,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 31 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 47 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
@@ -158,13 +160,13 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 - The parser is flat: no nested blocks (a list item cannot contain a quote or a code block).
 - Table cells cannot contain a real line break.
 - Undo is browser-native in live mode and textarea-native in source mode; they are not unified.
-- Images work only for pasted content in a saved document (they go to `assets/` next to it); relative images may not resolve inside the PDF export.
+- Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
 - Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
 - The app is ad-hoc signed. Do not distribute the built `.app` without notarizing it.
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — completed work is struck through, so what is left is what is not crossed out. Short version: multi-document, editable inline markers, footnotes/TOC, math + Mermaid, unified undo stack, nested blocks.
+See [ROADMAP.md](ROADMAP.md) — completed work is struck through, so what is left is what is not crossed out. Short version: editable inline markers, footnotes/TOC, math + Mermaid, unified undo stack, nested blocks.
 
 ### License
 
@@ -192,25 +194,26 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 5,000 行：Swift 1,000 行、Web 内核 2,900 行、功能模块 500 行、测试 600 行。
+整个编辑器约 5,600 行：Swift 1,200 行、Web 内核 3,000 行、功能模块 500 行、测试 800 行。
 
 ### 功能
 
 | 分类 | 能力 |
 |---|---|
-| **块级** | 段落、H1–H6、引用、有序/无序列表、围栏代码、表格、分隔线、YAML front matter |
-| **行内** | 粗体、斜体、行内代码、删除线、链接、图片 |
+| **块级** | 段落、H1–H6、引用、有序/无序列表、围栏代码、表格、分隔线、YAML front matter、GFM 软/硬换行 |
+| **行内** | 粗体、斜体、行内代码、删除线、链接、图片、括号/引号自动配对 |
 | **实时预览** | 无损 DOM：每个行内元素都记着自己的源码标记，Markdown 从 DOM 反推，不靠影子缓冲区 |
 | **200ms 画笔** | 只重绘脏块；块内 HTML 相同就完全不碰 DOM |
 | **`expand`** | 光标移进 `**粗体**`，标记自动浮出来 |
 | **源码模式** | `Cmd+/` 在渲染视图和原文之间双向切换 |
+| **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；打开新文件不会顶掉当前文档 |
 | **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、按 CJK 宽度算列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
 | **大纲** | `Cmd+Shift+O`，标题树 + 当前节高亮 |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，`Cmd+Shift+L` |
 | **文件** | 双击 `.md`、拖拽打开、最近打开、命令行参数、自动保存、关窗确认 |
-| **导出** | 分页 A4 PDF、自包含 HTML、代码高亮、粘贴图片落到 `assets/` |
+| **导出** | 分页 A4 PDF、自包含 HTML（本地图片内联为 data URL）、代码高亮、粘贴图片落到 `assets/` |
 
 ### 架构
 
@@ -287,7 +290,8 @@ cd markframe
 
 | 操作 | 快捷键 |
 |---|---|
-| 新建 / 打开 / 保存 / 另存为 | `Cmd+N` / `Cmd+O` / `Cmd+S` / `Shift+Cmd+S` |
+| 新建 / 新标签页 / 打开 / 保存 | `Cmd+N` / `Cmd+T` / `Cmd+O` / `Cmd+S` |
+| 硬换行 | `Shift+Enter`（或行尾两个空格 / `\`，GFM 语法） |
 | 导出 PDF / HTML | File → Export |
 | 粗体 / 斜体 / 行内代码 | `Cmd+B` / `Cmd+I` / `Cmd+K` |
 | 切换源码模式 | `Cmd+/` |
@@ -300,7 +304,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 31 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 47 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 40 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
@@ -314,13 +318,13 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 - 解析器是扁平的：没有嵌套块（列表项里放不了引用或代码块）。
 - 表格单元格里不能有真正的换行。
 - 撤销在实时模式下走浏览器、源码模式下走 textarea，两边没有统一。
-- 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径图片在 PDF 导出里可能缺失。
+- 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
 - 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
 - app 是 ad-hoc 签名，未公证前不要分发构建产物。
 
 ### 路线图
 
-见 [ROADMAP.md](ROADMAP.md) —— 已完成项用删除线划掉，没划掉的就是待办。简版：多文档、行内标记可编辑、脚注/TOC、数学与 Mermaid、统一撤销栈、嵌套块。
+见 [ROADMAP.md](ROADMAP.md) —— 已完成项用删除线划掉，没划掉的就是待办。简版：行内标记可编辑、脚注/TOC、数学与 Mermaid、统一撤销栈、嵌套块。
 
 ### 许可证
 

@@ -1,20 +1,23 @@
-// AppDelegate：菜单、生命周期、文件菜单动作
+// AppDelegate：菜单、生命周期、多窗口/标签页管理、文件菜单动作
+//
+// 多文档模型：每个文档一个 EditorWindowController（各自的 WKWebView 与桥）。
+// 本数组持有强引用，窗口关闭时移除。标签页用系统原生 tab group：
+//   window.tabbingMode = .preferred + keyWindow.addTabbedWindow(_:)
 
 import Cocoa
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var editorWindow: EditorWindowController?
+    var windowControllers: [EditorWindowController] = []
     private var recentMenu: NSMenu?
     private var pendingOpen: String?
 
     private let recentKey = "recentFiles"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSWindow.allowsAutomaticWindowTabbing = true
         buildMenu()
-        let wc = EditorWindowController()
-        editorWindow = wc
-        wc.onOpenFile = { [weak self] path in self?.noteRecent(path) }
-        wc.showWindow(nil)
+
+        let wc = makeController()
         NSApp.activate(ignoringOtherApps: true)
 
         // 直接运行二进制时把文件路径当参数传入
@@ -41,18 +44,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
+    // MARK: - 窗口管理
+
+    private func makeController() -> EditorWindowController {
+        let wc = EditorWindowController()
+        wc.onOpenFile = { [weak self] path in self?.noteRecent(path) }
+        wc.requestOpenFile = { [weak self] path in self?.openFile(at: path) }
+        windowControllers.append(wc)
+        wc.showWindow(nil)
+        return wc
+    }
+
+    /// 当前应该接收菜单动作的控制器（key window 优先）
+    private var activeController: EditorWindowController? {
+        if let key = NSApp.keyWindow {
+            if let wc = windowControllers.first(where: { $0.window === key }) { return wc }
+        }
+        if let main = NSApp.mainWindow {
+            if let wc = windowControllers.first(where: { $0.window === main }) { return wc }
+        }
+        return windowControllers.last
+    }
+
+    @objc private func windowWillClose(_ note: Notification) {
+        guard let w = note.object as? NSWindow else { return }
+        windowControllers.removeAll { $0.window === w }
+    }
+
     // MARK: - 打开文件
 
+    /// 打开文件的统一入口：空白未编辑窗口就地复用，否则开新窗口
+    /// （系统偏好设为「总是」时会自动并入标签组）
     func openFile(at path: String) {
-        guard let wc = editorWindow else {
+        if windowControllers.isEmpty {
             pendingOpen = path
             return
         }
-        // 当前文档有未保存修改时先确认，避免静默丢弃
-        wc.confirmDiscardIfNeeded { [weak self, weak wc] in
-            wc?.load(path: path)
-            self?.noteRecent(path)
+        if let wc = activeController ?? windowControllers.last, wc.isReusable {
+            wc.load(path: path)
+            noteRecent(path)
+            return
         }
+        let wc = makeController()
+        wc.load(path: path)
+        noteRecent(path)
     }
 
     private func noteRecent(_ path: String) {
@@ -129,8 +164,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(fileItem)
         let fileMenu = NSMenu(title: "File")
         fileItem.submenu = fileMenu
-        fileMenu.addItem(withTitle: "New", action: #selector(newDocument(_:)), keyEquivalent: "n")
-        fileMenu.addItem(withTitle: "Open…", action: #selector(openDocument(_:)), keyEquivalent: "o")
+        fileMenu.addItem(withTitle: "New Window", action: #selector(newDocument(_:)), keyEquivalent: "n")
+        fileMenu.addItem(withTitle: "New Tab", action: #selector(newTab(_:)), keyEquivalent: "t")
+
+        let openItem = fileMenu.addItem(withTitle: "Open…", action: #selector(openDocument(_:)), keyEquivalent: "o")
+        openItem.keyEquivalentModifierMask = [.command]
 
         let recentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
         let recent = NSMenu(title: "Open Recent")
@@ -202,40 +240,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenu.addItem(withTitle: "Zoom Out", action: #selector(zoomOut(_:)), keyEquivalent: "-")
         viewMenu.addItem(withTitle: "Actual Size", action: #selector(zoomReset(_:)), keyEquivalent: "0")
 
+        // 窗口（NSApp.windowsMenu 会让系统自动维护打开的文档列表）
+        let winItem = NSMenuItem()
+        main.addItem(winItem)
+        let winMenu = NSMenu(title: "Window")
+        winItem.submenu = winMenu
+        winMenu.addItem(withTitle: "Minimize",
+                        action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        winMenu.addItem(withTitle: "Zoom",
+                        action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        winMenu.addItem(.separator())
+        winMenu.addItem(withTitle: "Bring All to Front",
+                        action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        winMenu.addItem(.separator())
+        NSApp.windowsMenu = winMenu
+
+        // 帮助（有个空位比缺菜单好）
+        let helpItem = NSMenuItem()
+        main.addItem(helpItem)
+        helpItem.submenu = NSMenu(title: "Help")
+
         NSApp.mainMenu = main
         rebuildRecentMenu()
+
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(windowWillClose(_:)),
+                                               name: NSWindow.willCloseNotification,
+                                               object: nil)
     }
 
-    // MARK: - 动作转发到 Web 层
+    // MARK: - 动作转发到 Web 层（作用于 key window）
 
     private var js: ((String) -> Void)? {
-        editorWindow?.runJS
+        activeController?.runJS
     }
 
     @objc private func newDocument(_ sender: Any?) {
-        editorWindow?.confirmDiscardIfNeeded { [weak self] in
-            self?.editorWindow?.newDocument()
+        // 当前是空白未命名窗口就直接清空复用，避免窗口泛滥
+        if let wc = activeController, wc.isReusable {
+            wc.newDocument()
+            return
         }
+        _ = makeController()
+    }
+
+    @objc private func newTab(_ sender: Any?) {
+        let wc = makeController()
+        if let key = NSApp.keyWindow, key !== wc.window {
+            key.addTabbedWindow(wc.window!, ordered: .above)
+        }
+        wc.window?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func openDocument(_ sender: Any?) {
-        editorWindow?.openDocumentPanel()
+        guard let wc = activeController ?? windowControllers.last else { return }
+        wc.openDocumentPanel()
     }
 
     @objc private func saveDocument(_ sender: Any?) {
-        editorWindow?.save(saveAs: false)
+        activeController?.save(saveAs: false)
     }
 
     @objc private func saveDocumentAs(_ sender: Any?) {
-        editorWindow?.save(saveAs: true)
+        activeController?.save(saveAs: true)
     }
 
     @objc private func exportPDF(_ sender: Any?) {
-        editorWindow?.exportPDF()
+        activeController?.exportPDF()
     }
 
     @objc private func exportHTML(_ sender: Any?) {
-        editorWindow?.exportHTML()
+        activeController?.exportHTML()
     }
 
     @objc private func toggleBold(_ sender: Any?) { js?("window.__cmd('bold')") }

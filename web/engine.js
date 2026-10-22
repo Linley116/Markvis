@@ -131,6 +131,30 @@
         continue;
       }
 
+      // 换行：GFM 语义 —— 行尾两个以上空格或反斜杠是硬换行 <br>，
+      // 其余是软换行（渲染成空格，序列化时还原成单个 \n）
+      if (c === '\n') {
+        var bs = 0;
+        while (bs < buf.length && buf.charAt(buf.length - 1 - bs) === '\\') bs++;
+        var sp = 0;
+        while (sp < buf.length - bs && buf.charAt(buf.length - 1 - bs - sp) === ' ') sp++;
+
+        if (sp >= 2) {
+          buf = buf.slice(0, buf.length - sp);
+          flush();
+          out.push({ type: 'break', hard: true, mark: repeat(' ', sp) });
+        } else if (bs % 2 === 1) {
+          buf = buf.slice(0, buf.length - 1);
+          flush();
+          out.push({ type: 'break', hard: true, mark: '\\' });
+        } else {
+          flush();
+          out.push({ type: 'break', hard: false });
+        }
+        i++;
+        continue;
+      }
+
       // 行内代码
       if (c === '`') {
         var mCode = /^(`+)([\s\S]*?[^`])\1(?!`)/.exec(src.slice(i));
@@ -441,6 +465,13 @@
         case 'plain':
           return escapeHtml(n.text);
 
+        case 'break':
+          // 软换行：留在文本里，由 white-space 折叠成空格
+          // 硬换行：<br>，data-mark 记住源码里的标记（空格或反斜杠）
+          return n.hard
+            ? '<br class="md-hardbreak" data-mark="' + escapeAttr(n.mark || '  ') + '">'
+            : '\n';
+
         case 'strong':
           return '<span class="md-inline" mdtype="strong" data-open="' + escapeAttr(n.mark || '**') +
             '" data-close="' + escapeAttr(n.mark || '**') + '">' + renderInline(n.children) + '</span>';
@@ -467,7 +498,7 @@
             '<a href="' + escapeAttr(n.href) + '">' + escapeHtml(n.href) + '</a></span>';
 
         case 'image':
-          return '<img class="md-img" src="' + escapeAttr(n.src) + '" alt="' + escapeAttr(n.alt) +
+          return '<img class="md-img" src="' + escapeAttr(resolveImgSrc(n.src)) + '" alt="' + escapeAttr(n.alt) +
             '" data-src="' + escapeAttr('![' + n.alt + '](' + n.src + ')') + '">';
 
         default:
@@ -561,6 +592,17 @@
 
   var doc = [];
 
+  /** 当前文档所在目录（带尾斜杠）。渲染 <img> 时把相对路径解析成 file:// 绝对地址，
+      否则相对地址会落到 bundle 的 web/ 里。序列化仍用 data-src 里的原始相对路径。 */
+  var docBaseDir = '';
+
+  function resolveImgSrc(src) {
+    if (!src || !docBaseDir) return src;
+    if (/^(https?:|data:|file:|\/\/)/.test(src)) return src;
+    if (src.charAt(0) === '/') return src;
+    return 'file://' + docBaseDir.replace(/\/+$/, '') + '/' + src;
+  }
+
   function makeBlocks(raw) {
     return parseBlocks(raw).map(function (b) {
       b.cid = 'n' + (++nid);
@@ -619,6 +661,16 @@
   // 6. 序列化：DOM -> Markdown（对应 Typora 的 rawText）
   // =====================================================================
 
+  /** 硬换行 BR 还原成源码时要补的标记（两个空格或反斜杠）；Shift+Enter 插入的裸 BR 也按硬换行算 */
+  function brMark(el) {
+    return el.getAttribute('data-mark') || '  ';
+  }
+
+  /** BR 在源码里的长度：标记 + 换行符本身 */
+  function brSourceLen(el) {
+    return brMark(el).length + 1;
+  }
+
   function inlineRaw(el) {
     var out = '';
     for (var i = 0; i < el.childNodes.length; i++) {
@@ -631,7 +683,7 @@
       if (n.nodeType !== 1) continue;
 
       if (n.tagName === 'BR') {
-        if (!isPad(n)) out += '\n';
+        if (!isPad(n)) out += brMark(n) + '\n';
         continue;
       }
 
@@ -838,7 +890,7 @@
       if (node.nodeType !== 1) return;
 
       if (node.tagName === 'BR') {
-        if (!isPad(node)) pos += 1;
+        if (!isPad(node)) pos += brSourceLen(node);
         return;
       }
       if (node.tagName === 'IMG') { pos += (node.getAttribute('data-src') || '').length; return; }
@@ -920,7 +972,7 @@
       if (node.nodeType !== 1) return;
 
       if (node.tagName === 'BR') {
-        if (!isPad(node)) pos += 1;
+        if (!isPad(node)) pos += brSourceLen(node);
         return;
       }
       if (node.tagName === 'IMG') {
@@ -1283,6 +1335,106 @@
     setCaretBySourceOffset(target, inlineRaw(target).length);
   }
 
+  // ------------------------------------------------------------------
+  // 自动配对：括号与引号（代码块内与 IME 组合态不启用）
+  // ------------------------------------------------------------------
+
+  var PAIR_OPEN = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
+  var PAIR_CLOSE = { ')': true, ']': true, '}': true, '"': true, "'": true };
+
+  function pairableKey(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return false;
+    if (e.isComposing || composing) return false;
+    if (!PAIR_OPEN[e.key] && !PAIR_CLOSE[e.key]) return false;
+    var leaf = leafBlock();
+    if (leaf && leaf.getAttribute('mdtype') === 'fences') return false;
+    return true;
+  }
+
+  /** 光标右侧第一个字符 */
+  function charAfterCaret() {
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.isCollapsed) return null;
+    var range = sel.getRangeAt(0);
+    var node = range.startContainer;
+    var off = range.startOffset;
+    if (node.nodeType === 3) return node.nodeValue.charAt(off) || null;
+    var sib = node.childNodes[off];
+    if (sib && sib.nodeType === 3) return sib.nodeValue.charAt(0) || null;
+    return null;
+  }
+
+  /** 光标左侧第一个字符（空串表示行首/原子元素） */
+  function charBeforeCaret() {
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.isCollapsed) return '';
+    var range = sel.getRangeAt(0);
+    var node = range.startContainer;
+    var off = range.startOffset;
+    if (node.nodeType === 3) return off > 0 ? node.nodeValue.charAt(off - 1) : '';
+    var sib = node.childNodes[off - 1];
+    if (!sib) return '';
+    if (sib.nodeType === 3) return sib.nodeValue.slice(-1);
+    if (sib.tagName === 'BR') return '\n';
+    return '';
+  }
+
+  /** 输入闭合符且右边是同一个字符：光标跳过去，不重复插入 */
+  function skipOverClose(ch) {
+    if (charAfterCaret() !== ch) return false;
+    var sel = window.getSelection();
+    var range = sel.getRangeAt(0);
+    var node = range.startContainer;
+    var off = range.startOffset;
+    var target = null, targetOff = 0;
+
+    if (node.nodeType === 3) {
+      target = node; targetOff = off + 1;
+    } else {
+      var sib = node.childNodes[off];
+      if (sib && sib.nodeType === 3) { target = sib; targetOff = 1; }
+    }
+    if (!target) return false;
+
+    var r = document.createRange();
+    r.setStart(target, targetOff);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return true;
+  }
+
+  /** 插入配对；有选区时包裹选区并保持选中 */
+  function insertPair(open, close) {
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    var text = sel.toString();
+    var range = sel.getRangeAt(0);
+
+    var node;
+    if (text) {
+      range.deleteContents();
+      node = document.createTextNode(open + text + close);
+    } else {
+      node = document.createTextNode(open + close);
+    }
+    range.insertNode(node);
+
+    var r = document.createRange();
+    if (text) {
+      r.setStart(node, open.length);
+      r.setEnd(node, open.length + text.length);
+    } else {
+      r.setStart(node, open.length);
+      r.collapse(true);
+    }
+    sel.removeAllRanges();
+    sel.addRange(r);
+
+    markDirtyFromCaret();
+    setEdited(true);
+  }
+
   write.addEventListener('keydown', function (e) {
     var sel = window.getSelection();
     var cell = sel && sel.anchorNode ? closestCell(sel.anchorNode) : null;
@@ -1308,6 +1460,29 @@
       document.execCommand('insertText', false, '  ');
       return;
     }
+
+    // 括号 / 引号自动配对
+    if (pairableKey(e)) {
+      var handled = false;
+      if (PAIR_CLOSE[e.key] && skipOverClose(e.key)) {
+        handled = true;
+      } else if (PAIR_OPEN[e.key]) {
+        // 引号只在行首/空白/开括号后配对，避免 don't 被补成 don't'
+        var isQuote = (e.key === '"' || e.key === "'");
+        var prev = charBeforeCaret();
+        if (!isQuote || prev === '' || /\s/.test(prev) || PAIR_OPEN[prev]) {
+          insertPair(e.key, PAIR_OPEN[e.key]);
+          handled = true;
+        }
+      }
+      if (handled) {
+        e.preventDefault();
+        updateExpand();
+        return;
+      }
+      // 不满足配对条件：放行浏览器默认输入
+    }
+
     // Backspace 在空块首：并入上一块
     if (e.key === 'Backspace') {
       handleBackspace(e);
@@ -1541,6 +1716,7 @@
   var docLoadedHooks = [];
 
   window.__loadContent = function (path, text, title) {
+    docBaseDir = path ? String(path).replace(/[^/]*$/, '') : '';
     loadMarkdown(text || '');
     document.title = title || 'Untitled';
     setEdited(false);

@@ -168,6 +168,134 @@ function check(name, cond, extra) {
   });
   check('图片后输入落在正确位置', imgCaret === 'hello ![](a.png)X world', JSON.stringify(imgCaret));
 
+  console.log('\n[7.5] 软换行 / 硬换行（GFM 语义）');
+  const breaks = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+
+    // 软换行：单个 \n 不是 BR，往返仍是单个 \n
+    window.__loadContent('', 'soft\nbreak', 't');
+    await wait(80);
+    const p1 = document.querySelector('#write p[mdtype="paragraph"]');
+    const soft = { br: !!p1.querySelector('br.md-hardbreak'), md: window.__getMarkdown() };
+
+    // 行尾双空格 = 硬换行，BR 记住空格标记
+    window.__loadContent('', 'hard  \nbreak', 't');
+    await wait(80);
+    const p2 = document.querySelector('#write p[mdtype="paragraph"]');
+    const br = p2 && p2.querySelector('br.md-hardbreak');
+    const hard = { hasBR: !!br, mark: br && br.getAttribute('data-mark'), md: window.__getMarkdown() };
+
+    // 反斜杠硬换行
+    window.__loadContent('', 'back\\\nslash', 't');
+    await wait(80);
+    const p3 = document.querySelector('#write p[mdtype="paragraph"]');
+    const br3 = p3 && p3.querySelector('br.md-hardbreak');
+    const back = { hasBR: !!br3, mark: br3 && br3.getAttribute('data-mark'), md: window.__getMarkdown() };
+
+    // 引用内的硬换行：序列化要还原 > 前缀（每行都得带 >）
+    window.__loadContent('', '> quote  \n> more', 't');
+    await wait(80);
+    const quote = { md: window.__getMarkdown() };
+
+    // 画笔稳定：再过一轮画笔不改变结果
+    await wait(450);
+    const stable = { hard: window.__getMarkdown() };
+
+    return { soft, hard, back, quote, stable };
+  });
+  check('软换行不产生 BR', breaks.soft.br === false);
+  check('软换行往返仍是单个 \\n', breaks.soft.md === 'soft\nbreak', JSON.stringify(breaks.soft.md));
+  check('双空格产生硬换行 BR', breaks.hard.hasBR === true);
+  check('BR 记住空格标记', breaks.hard.mark === '  ', JSON.stringify(breaks.hard.mark));
+  check('硬换行往返保留双空格', breaks.hard.md === 'hard  \nbreak', JSON.stringify(breaks.hard.md));
+  check('反斜杠硬换行', breaks.back.hasBR === true && breaks.back.mark === '\\');
+  check('反斜杠硬换行往返', breaks.back.md === 'back\\\nslash', JSON.stringify(breaks.back.md));
+    check('引用内硬换行还原 > 前缀', breaks.quote.md === '> quote  \n> more', JSON.stringify(breaks.quote.md));
+    check('画笔多轮后稳定', breaks.stable.hard === '> quote  \n> more', JSON.stringify(breaks.stable.hard));
+
+  console.log('\n[7.6] 硬换行处的光标偏移');
+  const brCaret = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', 'aa  \nbb', 't');
+    await wait(80);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    window.MF.setCaretBySourceOffset(p, 6);   // bb 的 b 之后
+    document.execCommand('insertText', false, 'X');
+    await wait(450);
+    return window.__getMarkdown();
+  });
+  check('硬换行后输入不漂', brCaret === 'aa  \nbXb', JSON.stringify(brCaret));
+
+  console.log('\n[7.7] 括号 / 引号自动配对');
+  await page.evaluate(() => {
+    window.__loadContent('', 'pairtest', 't');
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    r.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  });
+  await page.keyboard.type('(');
+  await page.keyboard.type('x');
+  await page.keyboard.type(')');
+  await page.waitForTimeout(450);
+  const paired = await page.evaluate(() => window.__getMarkdown());
+  check('输入 ( 自动补 )，输入 ) 跳过', paired === 'pairtest(x)', JSON.stringify(paired));
+
+  const apoo = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', "don", 't');
+    await wait(60);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    r.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return true;
+  });
+  await page.keyboard.type("'t");
+  await page.waitForTimeout(450);
+  const apos = await page.evaluate(() => window.__getMarkdown());
+  check('字母后的撇号不配对', apos === "don't", JSON.stringify(apos));
+
+  const wrapped = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', 'wrap me', 't');
+    await wait(60);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    const r = document.createRange();
+    r.setStart(p.firstChild, 0);
+    r.setEnd(p.firstChild, 7);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return true;
+  });
+  await page.keyboard.type('[');
+  await page.waitForTimeout(450);
+  const wrapMd = await page.evaluate(() => window.__getMarkdown());
+  check('选区被 [ ] 包裹', wrapMd === '[wrap me]', JSON.stringify(wrapMd));
+
+  console.log('\n[7.8] 图片 src 按文档目录解析');
+  const img = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('/tmp/doc/x.md', '![](assets/a.png)', 'x.md');
+    await wait(80);
+    const i = document.querySelector('.md-img');
+    return {
+      src: i && i.getAttribute('src'),
+      data: i && i.getAttribute('data-src'),
+      md: window.__getMarkdown()
+    };
+  });
+  check('src 解析为 file:// 绝对地址', img.src === 'file:///tmp/doc/assets/a.png', img.src);
+  check('data-src 保留相对路径', img.data === '![](assets/a.png)', img.data);
+  check('序列化仍是相对路径', img.md === '![](assets/a.png)', img.md);
+
   console.log('\n[8] 运行时错误');
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 

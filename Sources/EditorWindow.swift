@@ -158,9 +158,22 @@ final class EditorWindowController: NSWindowController {
     /// 成功打开文件后回调（AppDelegate 用来记「最近打开」）
     var onOpenFile: ((String) -> Void)?
 
+    /// 当前窗口不适合接这个文件时（已脏/已有文档），交给 AppDelegate 开新窗口
+    var requestOpenFile: ((String) -> Void)?
+
+    /// 空白未命名且无修改：可以就地加载新文档，不必开新窗口
+    var isReusable: Bool {
+        currentPath.isEmpty && (window?.isDocumentEdited != true)
+    }
+
     private var pendingLoadPath: String?
+    private var pendingContent: (path: String, content: String, title: String)?
 
     private var pendingZoom: Double = 1.0
+
+    /// bundle 里的 web/ 目录，以及当前 WebView 被授予的可读根目录
+    private var webRoot: URL?
+    private var readRoot: URL?
 
     convenience init() {
         let window = NSWindow(
@@ -173,6 +186,8 @@ final class EditorWindowController: NSWindowController {
         window.minSize = NSSize(width: 560, height: 420)
         window.center()
         window.setFrameAutosaveName("MarkFrameMainWindow")
+        window.tabbingMode = .preferred
+        window.tabbingIdentifier = "MarkFrame"
         self.init(window: window)
 
         let config = WKWebViewConfiguration()
@@ -207,6 +222,8 @@ final class EditorWindowController: NSWindowController {
             NSLog("web resources missing")
             return
         }
+        webRoot = webDir
+        readRoot = webDir
         let index = webDir.appendingPathComponent("index.html")
         webView.navigationDelegate = self
         webView.loadFileURL(index, allowingReadAccessTo: webDir)
@@ -351,7 +368,13 @@ final class EditorWindowController: NSWindowController {
         panel.allowsMultipleSelection = false
         panel.beginSheetModal(for: window!) { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
-            self?.load(path: url.path)
+            guard let self = self else { return }
+            // 空白窗口就地打开；已有内容的窗口交给 AppDelegate 决定复用还是新窗口
+            if self.isReusable {
+                self.load(path: url.path)
+            } else {
+                self.requestOpenFile?(url.path)
+            }
         }
     }
 
@@ -371,11 +394,108 @@ final class EditorWindowController: NSWindowController {
             if let s = try? String(contentsOf: url, encoding: enc) { text = s; break }
         }
         guard let content = text else { return }
+
+        // 文档目录若不在当前可读范围外，把读取权限放宽到 web/ 与文档目录的
+        // 公共祖先并重载页面 —— 否则相对路径的图片（file:// 解析后）会被
+        // WebKit 拦掉，编辑器里显示不出来，分页测量也会出错。
+        let docDir = url.deletingLastPathComponent()
+        if !isReadable(docDir) {
+            reloadWithWiderAccess(covering: docDir)
+            pendingContent = (path, content, url.lastPathComponent)
+            return
+        }
+
+        applyContent(path: path, content: content, title: url.lastPathComponent)
+    }
+
+    private func applyContent(path: String, content: String, title: String) {
         currentPath = path
-        window?.title = url.lastPathComponent
+        window?.title = title
         window?.isDocumentEdited = false
-        runJS("window.__loadContent(\(jsStringLiteral(path)), \(jsStringLiteral(content)), \(jsStringLiteral(url.lastPathComponent)))")
+        runJS("window.__loadContent(\(jsStringLiteral(path)), \(jsStringLiteral(content)), \(jsStringLiteral(title)))")
         onOpenFile?(path)
+    }
+
+    private func isReadable(_ dir: URL) -> Bool {
+        guard let root = readRoot else { return false }
+        // 把两者都标准化后再比较前缀
+        let rootPath = root.standardizedFileURL.path
+        let dirPath = dir.standardizedFileURL.path
+        return dirPath == rootPath || dirPath.hasPrefix(rootPath + "/")
+    }
+
+    /// 两个目录的最近公共祖先
+    private func commonAncestor(_ a: URL, _ b: URL) -> URL {
+        let ap = a.standardizedFileURL.pathComponents
+        let bp = b.standardizedFileURL.pathComponents
+        var shared: [String] = []
+        for i in 0..<min(ap.count, bp.count) {
+            if ap[i] == bp[i] { shared.append(ap[i]) } else { break }
+        }
+        if shared.isEmpty { return URL(fileURLWithPath: "/") }
+        return URL(fileURLWithPath: "/" + shared.dropFirst().joined(separator: "/"))
+    }
+
+    private func reloadWithWiderAccess(covering dir: URL) {
+        guard let webDir = webRoot else { return }
+        let index = webDir.appendingPathComponent("index.html")
+        let root = commonAncestor(webDir, dir)
+        readRoot = root
+        mfLog("widen read access to: \(root.path)")
+        webView.loadFileURL(index, allowingReadAccessTo: root)
+    }
+
+    // MARK: 导出时把本地图片内联成 data URL
+    //
+    // 导出视图（临时目录里的打印壳）与独立 HTML 都读不到文档目录里的图片，
+    // 唯一可靠的办法是原生把文件读出来转 base64。按路径做了缓存，
+    // 同一张图出现在多页时只读一次。
+
+    private var imageDataCache: [String: String] = [:]
+
+    private func mimeForExtension(_ ext: String) -> String {
+        switch ext.lowercased() {
+        case "png": return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "gif": return "image/gif"
+        case "webp": return "image/webp"
+        case "svg": return "image/svg+xml"
+        default: return "application/octet-stream"
+        }
+    }
+
+    private func dataURLForFile(_ fileURL: URL) -> String? {
+        let key = fileURL.path
+        if let hit = imageDataCache[key] { return hit }
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        let mime = mimeForExtension(fileURL.pathExtension)
+        let encoded = "data:\(mime);base64,\(data.base64EncodedString())"
+        imageDataCache[key] = encoded
+        return encoded
+    }
+
+    /// 把 HTML 里 src="file://…" 的本地图片替换为 data URL（读不到的保持原样）
+    private func inlineImages(in html: String) -> String {
+        guard html.contains("src=\"file://") else { return html }
+        guard let re = try? NSRegularExpression(pattern: "src=\"(file://[^\"]+)\"") else { return html }
+
+        var out = ""
+        var cursor = html.startIndex
+        let full = NSRange(html.startIndex..., in: html)
+
+        for m in re.matches(in: html, range: full) {
+            guard let whole = Range(m.range, in: html),
+                  let srcRange = Range(m.range(at: 1), in: html) else { continue }
+            let rawPath = String(html[srcRange]).replacingOccurrences(of: "file://", with: "")
+            let path = rawPath.removingPercentEncoding ?? rawPath
+            guard let dataURL = dataURLForFile(URL(fileURLWithPath: path)) else { continue }
+
+            out += html[cursor..<whole.lowerBound]
+            out += "src=\"\(dataURL)\""
+            cursor = whole.upperBound
+        }
+        out += html[cursor...]
+        return out
     }
 
     // MARK: 导出
@@ -397,7 +517,8 @@ final class EditorWindowController: NSWindowController {
                  "window.__buildExportHTML ? window.__buildExportHTML() : null"
         runJSReturning(js) { [weak self] result in
             guard let self = self, let raw = result as? String, !raw.isEmpty else { return }
-            let html = self.injectCSS(into: raw)
+            // 图片转 data URL，导出的单文件才是真正自包含的
+            let html = self.inlineImages(in: self.injectCSS(into: raw))
             self.presentExportPanel(ext: "html") { url in
                 do {
                     try html.write(to: url, atomically: true, encoding: .utf8)
@@ -505,7 +626,8 @@ final class EditorWindowController: NSWindowController {
     }
 
     private func startRenderPipeline(shellHTML: String) {
-        let html = injectCSS(into: shellHTML)
+        // 打印壳在临时目录里，读不到文档目录的图片：先内联成 data URL
+        let html = inlineImages(in: injectCSS(into: shellHTML))
         let shell = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("markframe-print-\(UUID().uuidString).html")
         do {
@@ -668,10 +790,17 @@ final class EditorWindowController: NSWindowController {
 
 extension EditorWindowController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // 页面就绪后再补上启动时排队的文件
+        // 页面就绪后再补上启动时排队的文件（新的打开请求优先，丢弃旧的排队内容）
         if let path = pendingLoadPath {
             pendingLoadPath = nil
+            pendingContent = nil
             performLoad(path: path)
+            return
+        }
+        // 扩大读取权限后重载的页面：就绪后灌入排队的文档
+        if let queued = pendingContent {
+            pendingContent = nil
+            applyContent(path: queued.path, content: queued.content, title: queued.title)
         }
     }
 }
