@@ -168,4 +168,4 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 许可证
 
-MIT，见 [LICENSE](LICENSE)。Highlight.js 为 BSD-3-Clause，版权归 Josh Goebel 及贡献者所有。
+MIT，见 [LICENSE](LICENSE)（含第三方声明）。

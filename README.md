@@ -167,4 +167,4 @@ See [ROADMAP.md](ROADMAP.md) — completed work is struck through, so what is le
 
 ### License
 
-MIT — see [LICENSE](LICENSE). Highlight.js is BSD-3-Clause, © Josh Goebel and contributors.
+MIT — see [LICENSE](LICENSE) (third-party notices included).
