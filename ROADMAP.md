@@ -1,7 +1,7 @@
 # MarkFrame 路线图
 
-> **基线 v0.8.1** · 6,769 行（engine 2,977 / css 880 / features 521 / Swift 1,410 / tests 981）
-> **120 项断言全绿**（引擎 80 + 功能 40）+ PDF 内容回归 + 崩溃恢复冒烟 · 包体 3.6 MB
+> **基线 v0.8.2** · 6,790 行（engine 2,977 / css 880 / features 521 / Swift 1,410 / tests 1,002）
+> **123 项断言全绿**（引擎 83 + 功能 40）+ PDF 内容回归 + 崩溃恢复冒烟 · 包体 3.6 MB
 > 仓库：<https://github.com/Linley116/markframe>
 
 图例：✅ 已完成 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -70,6 +70,7 @@
 | v0.6 | 点正文链接会把 WKWebView 导航走，编辑器变网页 | `decidePolicyFor` 拦截 http/https/mailto，交给系统浏览器 |
 | v0.7 | 未命名文档断电/崩溃即丢 | 每 1.2s 写恢复目录，启动时提示「恢复 / 丢弃」 |
 | v0.8.1 | `Drawing a PDFPage when its PDFDocument is nil`，偶发空页 | 导出改存 `PDFDocument`，合并时再取页 |
+| v0.8.2 | 焦点在源码框里按 `Cmd+/` 切不回实时模式 | textarea 与 document 各挂了一个监听，事件冒泡导致一次按键切两次、正反相消；删掉 textarea 上那份，统一由 document 处理 |
 
 ---
 

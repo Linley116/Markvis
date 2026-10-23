@@ -147,7 +147,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 80 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 83 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content

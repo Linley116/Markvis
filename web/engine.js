@@ -2156,12 +2156,10 @@
   }
 
   source.addEventListener('input', function () { setEdited(true); });
-  source.addEventListener('keydown', function (e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === '/') {
-      e.preventDefault();
-      toggleSource();
-    }
-  });
+  // 注意：这里不能单独给 source 挂 Cmd+/ ——
+  // textarea 是 document 的后代，事件会冒泡上去，document 上的监听会再切一次，
+  // 一次按键切两下正反相消，表现为「焦点在源码框里时切不回实时模式」。
+  // 统一由文档级监听处理（见文件末尾）。
 
   // =====================================================================
   // 13. 状态

@@ -148,7 +148,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 80 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 83 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 40 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容

@@ -163,6 +163,29 @@ function check(name, cond, extra) {
   check('退出后恢复 Live', src.mode === 'Live');
   check('往返后内容仍在', src.after.includes('# MarkFrame'));
 
+  console.log('\n[6.1] Cmd+/ 双向切换（回归：焦点在源码框里切不回来）');
+  await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '切换测试', 't');
+    await wait(80);
+    document.getElementById('write').focus();
+  });
+  await page.keyboard.press('Meta+/');
+  await page.waitForTimeout(150);
+  const toSource = await page.evaluate(() => ({
+    mode: document.getElementById('mode').textContent,
+    focus: document.activeElement.id
+  }));
+  await page.keyboard.press('Meta+/');
+  await page.waitForTimeout(200);
+  const backToLive = await page.evaluate(() => ({
+    mode: document.getElementById('mode').textContent,
+    focus: document.activeElement.id
+  }));
+  check('正文里按 Cmd+/ 进入源码模式', toSource.mode === 'Source' && toSource.focus === 'source', JSON.stringify(toSource));
+  check('源码框里按 Cmd+/ 能切回实时模式', backToLive.mode === 'Live', JSON.stringify(backToLive));
+  check('切回后焦点回到正文', backToLive.focus === 'write', JSON.stringify(backToLive));
+
   console.log('\n[7] 光标模型：图片是非文本原子，偏移不能漂');
   const imgCaret = await page.evaluate(async () => {
     window.__loadContent('', 'hello ![](a.png) world', 't');
