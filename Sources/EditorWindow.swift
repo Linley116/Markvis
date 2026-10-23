@@ -76,6 +76,36 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                 let info = (data as? [String: Any])?["version"] as? String ?? "?"
                 try? "ready \(info)".write(toFile: marker, atomically: true, encoding: .utf8)
             }
+            // 文件树自检：MARKFRAME_TEST_LIBRARY=<marker> 时把某个目录的清单写成 JSON
+            if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY"] {
+                let dir = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY_DIR"] ?? ""
+                // 自检时把测试目录当根目录用，不污染用户的根目录偏好
+                let list = controller?.libraryList(path: dir, root: dir.isEmpty ? nil : dir) ?? []
+                let summary: [String: Any] = [
+                    "count": list.count,
+                    "names": list.compactMap { $0["name"] as? String },
+                    "dirs": list.compactMap { $0["dir"] as? Bool },
+                    "paths": list.compactMap { $0["path"] as? String }
+                ]
+                if let json = jsonEncode(summary) {
+                    try? json.write(toFile: marker, atomically: true, encoding: .utf8)
+                }
+            }
+            // 文件树自检：MARKFRAME_TEST_LIBRARY=<marker> 时把某个目录的清单写成 JSON
+            if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY"] {
+                let dir = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY_DIR"] ?? ""
+                // 自检时把测试目录当根目录，不污染用户的根目录偏好
+                let list = controller?.libraryList(path: dir, root: dir.isEmpty ? nil : dir) ?? []
+                let summary: [String: Any] = [
+                    "count": list.count,
+                    "names": list.compactMap { $0["name"] as? String },
+                    "dirs": list.compactMap { $0["dir"] as? Bool },
+                    "paths": list.compactMap { $0["path"] as? String }
+                ]
+                if let json = jsonEncode(summary) {
+                    try? json.write(toFile: marker, atomically: true, encoding: .utf8)
+                }
+            }
             // 自定义主题自检：MARKFRAME_TEST_THEMES=<marker> 时把主题清单写成 JSON
             if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_THEMES"] {
                 let list = controller?.themeList() ?? []
@@ -91,6 +121,52 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                     try? json.write(toFile: marker, atomically: true, encoding: .utf8)
                 }
             }
+            respond(nil)
+
+        case "library.list":
+            let dict = data as? [String: Any] ?? [:]
+            respond(controller?.libraryList(path: dict["path"] as? String ?? ""))
+
+        case "library.root":
+            respond(["root": controller?.effectiveLibraryRoot() ?? ""])
+
+        case "library.setRoot":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            var isDir: ObjCBool = false
+            if !p.isEmpty, FileManager.default.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue {
+                EditorWindowController.libraryRoot = p
+            }
+            respond(["root": controller?.effectiveLibraryRoot() ?? ""])
+
+        case "library.chooseRoot":
+            controller?.chooseLibraryRoot()
+            respond(nil)
+
+        case "library.create":
+            let dict = data as? [String: Any] ?? [:]
+            respond(controller?.libraryCreate(
+                in: dict["path"] as? String ?? "",
+                name: dict["name"] as? String ?? "",
+                kind: dict["kind"] as? String ?? "file"))
+
+        case "library.rename":
+            let dict = data as? [String: Any] ?? [:]
+            respond(controller?.libraryRename(
+                path: dict["path"] as? String ?? "",
+                name: dict["name"] as? String ?? ""))
+
+        case "library.delete":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            respond(controller?.libraryDelete(path: p))
+
+        case "library.reveal":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            controller?.libraryReveal(path: p)
+            respond(nil)
+
+        case "document.openPath":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            if !p.isEmpty { controller?.requestOpenFile?(p) }
             respond(nil)
 
         case "themes.list":
@@ -331,6 +407,154 @@ final class EditorWindowController: NSWindowController {
               let size = attrs[.size] as? Int, size < 1_000_000 else { return nil }
         guard let css = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         return ["css": css, "name": themeDisplayName(at: url) ?? id]
+    }
+
+    // MARK: 文件树（F9）
+
+    static let libraryRootKey = "mf.library.root"
+
+    static var libraryRoot: String {
+        get { UserDefaults.standard.string(forKey: libraryRootKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: libraryRootKey) }
+    }
+
+    /// 根目录：用户选过就用选过的；否则跟着当前文档；再否则 Home
+    func effectiveLibraryRoot() -> String {
+        let saved = Self.libraryRoot
+        if !saved.isEmpty {
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: saved, isDirectory: &isDir), isDir.boolValue {
+                return saved
+            }
+        }
+        if !currentPath.isEmpty { return (currentPath as NSString).deletingLastPathComponent }
+        return NSHomeDirectory()
+    }
+
+    /// 路径必须落在根目录内，否则拒绝（防 ../ 穿越）
+    private func safeEntryURL(_ raw: String, root: String) -> URL? {
+        guard !raw.isEmpty else { return nil }
+        let url = URL(fileURLWithPath: raw).standardizedFileURL
+        let rootURL = URL(fileURLWithPath: root).standardizedFileURL
+        guard url.path.hasPrefix(rootURL.path + "/") else { return nil }
+        return url
+    }
+
+    func libraryList(path raw: String, root: String? = nil) -> [[String: Any]] {
+        let root = root ?? effectiveLibraryRoot()
+        let dir: URL
+        if raw.isEmpty {
+            dir = URL(fileURLWithPath: root)
+        } else if let safe = safeEntryURL(raw, root: root) {
+            dir = safe
+        } else {
+            dir = URL(fileURLWithPath: root)
+        }
+
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return [] }
+
+        var out: [[String: Any]] = []
+        for url in items where !url.lastPathComponent.hasPrefix(".") {
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            out.append([
+                "name": url.lastPathComponent,
+                "path": url.path,
+                "dir": isDir,
+                "ext": url.pathExtension.lowercased()
+            ])
+        }
+        return out.sorted { a, b in
+            let ad = a["dir"] as? Bool ?? false
+            let bd = b["dir"] as? Bool ?? false
+            if ad != bd { return ad }
+            let an = a["name"] as? String ?? ""
+            let bn = b["name"] as? String ?? ""
+            return an.localizedStandardCompare(bn) == .orderedAscending
+        }
+    }
+
+    func libraryCreate(in rawDir: String, name: String, kind: String) -> [String: Any] {
+        let root = effectiveLibraryRoot()
+        let dir = rawDir.isEmpty
+            ? URL(fileURLWithPath: root)
+            : (safeEntryURL(rawDir, root: root) ?? URL(fileURLWithPath: root))
+
+        var clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, !clean.contains("/") else { return ["error": "bad name"] }
+        if kind != "dir" && !clean.lowercased().hasSuffix(".md") { clean += ".md" }
+
+        let target = dir.appendingPathComponent(clean).standardizedFileURL
+        guard target.path.hasPrefix(dir.standardizedFileURL.path + "/") else { return ["error": "bad name"] }
+
+        let fm = FileManager.default
+        do {
+            if kind == "dir" {
+                try fm.createDirectory(at: target, withIntermediateDirectories: true)
+            } else {
+                try Data().write(to: target)
+            }
+            return ["ok": true, "path": target.path]
+        } catch {
+            return ["error": "\(error)"]
+        }
+    }
+
+    func libraryRename(path raw: String, name: String) -> [String: Any] {
+        let root = effectiveLibraryRoot()
+        guard let url = safeEntryURL(raw, root: root) else { return ["error": "bad path"] }
+        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, !clean.contains("/") else { return ["error": "bad name"] }
+
+        let target = url.deletingLastPathComponent().appendingPathComponent(clean).standardizedFileURL
+        do {
+            try FileManager.default.moveItem(at: url, to: target)
+            return ["ok": true, "path": target.path]
+        } catch {
+            return ["error": "\(error)"]
+        }
+    }
+
+    /// 删除进废纸篓（不直接抹掉）
+    func libraryDelete(path raw: String) -> [String: Any] {
+        let root = effectiveLibraryRoot()
+        guard let url = safeEntryURL(raw, root: root) else { return ["error": "bad path"] }
+
+        let fm = FileManager.default
+        let trash = fm.urls(for: .trashDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
+        var target = trash.appendingPathComponent(url.lastPathComponent)
+        var n = 1
+        while fm.fileExists(atPath: target.path) {
+            let base = url.deletingPathExtension().lastPathComponent
+            target = trash.appendingPathComponent("\(base).\(n).\(url.pathExtension)")
+            n += 1
+        }
+        do {
+            try fm.moveItem(at: url, to: target)
+            return ["ok": true]
+        } catch {
+            return ["error": "\(error)"]
+        }
+    }
+
+    func libraryReveal(path raw: String) {
+        let root = effectiveLibraryRoot()
+        guard let url = safeEntryURL(raw, root: root) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func chooseLibraryRoot() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.beginSheetModal(for: window!) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            Self.libraryRoot = url.path
+            self?.runJS("window.MFLibrary && window.MFLibrary.rootChanged()")
+        }
     }
 
     func openThemesFolder() {

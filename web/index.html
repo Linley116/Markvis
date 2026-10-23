@@ -8,13 +8,20 @@
 </head>
 <body>
 <!-- 左上角常驻的大纲开关：收起后仍停在原处，点一下重新展开 -->
-<button id="mf-outline-btn" type="button" title="显示大纲 (Cmd+Shift+O)"
+<button id="mf-outline-btn" class="mf-fab" type="button" title="显示大纲 (Cmd+Shift+O)"
         aria-label="大纲" aria-pressed="true">
   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
     <rect class="mf-fab-fill" x="1.9" y="2.9" width="4.6" height="10.2" fill="currentColor" opacity="0"/>
     <rect x="1.6" y="2.6" width="12.8" height="10.8" rx="2.4"
           fill="none" stroke="currentColor" stroke-width="1.2"/>
     <line x1="6.9" y1="3.2" x2="6.9" y2="12.8" stroke="currentColor" stroke-width="1.2"/>
+  </svg>
+</button>
+<!-- 右上角常驻的文件树开关：与左上角的大纲开关对称，面板在右侧 -->
+<button id="mf-library-btn" type="button" class="mf-fab mf-fab-right" title="显示文件树 (Cmd+Shift+E)"
+        aria-label="文件树" aria-pressed="false">
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+    <path d="M1.5 4.2h4l1.2 1.5h7.8v7.6h-13z" fill="none" stroke="currentColor" stroke-width="1.2"/>
   </svg>
 </button>
 <main id="scroll">
@@ -25,7 +32,7 @@
   <span id="mode" class="pill">Live</span>
   <span id="wordcount">0 字</span>
   <button id="mf-theme-btn" class="mf-chip">跟随系统</button>
-  <span id="hint">Cmd+/ 源码 · Cmd+F 查找 · Cmd+Shift+O 大纲</span>
+  <span id="hint">Cmd+/ 源码 · Cmd+F 查找 · Cmd+Shift+O 大纲 · Cmd+Shift+E 文件树</span>
 </div>
 <div id="mf-math-editor">
   <textarea id="mf-math-input" spellcheck="false" placeholder="TeX 或 mermaid 源码"></textarea>
@@ -42,5 +49,6 @@
 <script src="features/focus.js"></script>
 <script src="features/theme.js"></script>
 <script src="features/autosave.js"></script>
+<script src="features/library.js"></script>
 </body>
 </html>

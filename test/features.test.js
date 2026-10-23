@@ -450,6 +450,94 @@ const TABLE_MD = [
   check('序列化保留 front matter', rich.md.indexOf('---\nname: x') === 0, rich.md.slice(0, 20));
   check('序列化保留列表编号', /^3\. 第三$/m.test(rich.md));
 
+  console.log('\n[12] 文件树（F9，桩掉 library.* 桥）');
+  const lib = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const calls = [];
+    const tree = [
+      { name: 'notes', path: '/root/notes', dir: true, ext: '' },
+      { name: 'a.md', path: '/root/a.md', dir: false, ext: 'md' },
+      { name: 'b.txt', path: '/root/b.txt', dir: false, ext: 'txt' }
+    ];
+    const sub = [{ name: 'deep.md', path: '/root/notes/deep.md', dir: false, ext: 'md' }];
+
+    const orig = window.bridge.callHandler;
+    window.bridge.callHandler = function (name, data, cb) {
+      calls.push({ name: name, data: data });
+      if (name === 'library.root' && cb) return cb({ root: '/root' });
+      if (name === 'library.list' && cb) {
+        return cb(data && data.path === '/root/notes' ? sub : tree);
+      }
+      if (name === 'library.create' && cb) return cb({ ok: true, path: '/root/new.md' });
+      if (name === 'library.delete' && cb) return cb({ ok: true });
+      if (cb) cb(null);
+    };
+
+    window.MFLibrary.rootChanged();
+    await wait(120);
+    window.MFLibrary.open();
+    await wait(120);
+
+    const rows = Array.from(document.querySelectorAll('.mf-lib-row')).map(r => ({
+      name: r.querySelector('.mf-lib-name').textContent,
+      dir: r.getAttribute('data-dir') === '1'
+    }));
+
+    document.querySelector('.mf-lib-row[data-path="/root/notes"]').click();
+    await wait(120);
+    const afterExpand = Array.from(document.querySelectorAll('.mf-lib-row'))
+      .map(r => r.querySelector('.mf-lib-name').textContent);
+
+    document.querySelector('.mf-lib-row[data-path="/root/a.md"]').click();
+    await wait(60);
+    const openCall = calls.filter(c => c.name === 'document.openPath').pop();
+
+    const panel = document.getElementById('mf-library');
+    const rect = panel.getBoundingClientRect();
+    const margin = getComputedStyle(document.getElementById('scroll')).marginRight;
+
+    // 新建文件（行内输入 + Enter）
+    document.querySelector('[data-act="newfile"]').click();
+    const input = document.querySelector('.mf-lib-input');
+    input.value = 'hello.md';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await wait(100);
+    const createCall = calls.filter(c => c.name === 'library.create').pop();
+
+    // 删除（confirm 桩掉，走右键菜单）
+    window.confirm = function () { return true; };
+    document.querySelector('.mf-lib-row[data-path="/root/b.txt"]')
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 100, clientY: 100 }));
+    await wait(60);
+    const delBtn = Array.from(document.querySelectorAll('.mf-lib-menu-item'))
+      .find(b => b.textContent === '删除');
+    delBtn.click();
+    await wait(100);
+    const deleteCall = calls.filter(c => c.name === 'library.delete').pop();
+
+    document.querySelector('[data-act="close"]').click();
+    await wait(60);
+
+    window.bridge.callHandler = orig;
+    return {
+      rows, afterExpand, openCall,
+      rectRight: Math.round(window.innerWidth - rect.right),
+      margin, createCall, deleteCall,
+      closed: !document.body.classList.contains('mf-lib-open')
+    };
+  });
+  check('根目录列出条目', lib.rows.length === 3 && lib.rows[0].name === 'notes', JSON.stringify(lib.rows));
+  check('目录排在文件前', lib.rows[0].dir === true && lib.rows[1].dir === false, JSON.stringify(lib.rows));
+  check('点目录展开子级', lib.afterExpand.indexOf('deep.md') >= 0, JSON.stringify(lib.afterExpand));
+  check('点文件走 document.openPath', lib.openCall && lib.openCall.data.path === '/root/a.md', JSON.stringify(lib.openCall));
+  check('面板贴在右侧且正文让位', lib.rectRight === 0 && lib.margin === '240px', JSON.stringify([lib.rectRight, lib.margin]));
+  check('新建文件带上目录与类型',
+        lib.createCall && lib.createCall.data.path === '/root' &&
+        lib.createCall.data.name === 'hello.md' && lib.createCall.data.kind === 'file',
+        JSON.stringify(lib.createCall));
+  check('删除走 library.delete', lib.deleteCall && lib.deleteCall.data.path === '/root/b.txt', JSON.stringify(lib.deleteCall));
+  check('可以收起', lib.closed === true);
+
   console.log('\n[11] 运行时错误');
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 

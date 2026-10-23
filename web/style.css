@@ -629,9 +629,21 @@ body.mf-resizing #scroll { transition: none; }
    常驻在窗口左上角：侧栏展开时压在侧栏页眉上，收起后停在原处浮在正文上，
    所以「收起」和「再展开」是同一个按钮、同一个位置。 */
 
-#mf-outline-btn {
+
+#mf-outline-btn .mf-fab-fill { opacity: 0; transition: opacity .12s; }
+body.mf-outline-open #mf-outline-btn .mf-fab-fill { opacity: .22; }
+body.mf-outline-open #mf-outline-btn:hover { background: var(--code-bg); color: var(--fg); }
+
+/* 收起后浮在正文上：补一点底色，不然白底上看不见 */
+body:not(.mf-outline-open) #mf-outline-btn {
+  background: var(--code-bg);
+  border-color: var(--border);
+  opacity: .8;
+}
+
+/* 左上角（大纲）/ 右上角（文件树）两个常驻开关共用一套外观 */
+.mf-fab {
   position: fixed;
-  left: 10px;
   top: 10px;
   z-index: 40;
   width: 30px;
@@ -645,27 +657,37 @@ body.mf-resizing #scroll { transition: none; }
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: color .12s, background .12s, border-color .12s, opacity .12s;
+  transition: color .12s, background .12s, border-color .12s, opacity .12s, right .18s ease;
 }
 
-#mf-outline-btn svg { display: block; }
+.mf-fab svg { display: block; }
 
-#mf-outline-btn .mf-fab-fill { opacity: 0; transition: opacity .12s; }
-body.mf-outline-open #mf-outline-btn .mf-fab-fill { opacity: .22; }
-body.mf-outline-open #mf-outline-btn:hover { background: var(--code-bg); color: var(--fg); }
+#mf-outline-btn { left: 10px; }
+#mf-library-btn { right: 10px; }
 
-/* 收起后浮在正文上：补一点底色，不然白底上看不见 */
-body:not(.mf-outline-open) #mf-outline-btn {
-  background: var(--code-bg);
-  border-color: var(--border);
-  opacity: .8;
-}
+/* 面板展开时开关挪到面板外侧，免得压住面板自己的按钮 */
+body.mf-lib-open #mf-library-btn { right: calc(var(--mf-lib-w, 240px) + 10px); }
 
 body:not(.mf-outline-open) #mf-outline-btn:hover {
   opacity: 1;
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* 文件树开关：收起时同样浮在正文上，展开时压在面板左侧 */
+body:not(.mf-lib-open) #mf-library-btn {
+  background: var(--code-bg);
+  border-color: var(--border);
+  opacity: .8;
+}
+
+body:not(.mf-lib-open) #mf-library-btn:hover {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+body.mf-lib-open #mf-library-btn:hover { background: var(--code-bg); color: var(--fg); }
 
 .mf-outline-head {
   display: flex;
@@ -714,6 +736,203 @@ body:not(.mf-outline-open) #mf-outline-btn:hover {
   padding: 10px 12px;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* ---------- 文件树侧栏（F9，右侧） ---------- */
+
+#mf-library {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 30px;
+  width: var(--mf-lib-w, 240px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform .18s ease;
+  z-index: 20;
+  font-size: 12.5px;
+}
+
+body.mf-lib-open #mf-library { transform: none; }
+
+body.mf-lib-open #scroll { margin-right: var(--mf-lib-w, 240px); }
+
+#scroll { transition: margin-left .18s ease, margin-right .18s ease; }
+
+body.mf-lib-resizing #scroll { transition: none; }
+
+.mf-lib-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 8px 8px 14px;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.mf-lib-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mf-lib-acts { display: flex; gap: 2px; }
+
+.mf-lib-act {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+
+.mf-lib-act:hover { background: var(--code-bg); color: var(--fg); }
+
+.mf-lib-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 0 20px;
+  user-select: none;
+}
+
+.mf-lib-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding-right: 8px;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mf-lib-row:hover { background: var(--code-bg); }
+
+.mf-lib-row.mf-dir { color: var(--fg); font-weight: 500; }
+
+.mf-lib-twisty {
+  width: 12px;
+  flex: 0 0 12px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+  transition: transform .12s;
+}
+
+.mf-lib-twisty.mf-open { transform: rotate(90deg); }
+
+.mf-lib-twisty.mf-leaf { visibility: hidden; }
+
+.mf-lib-icon { display: flex; color: var(--muted); }
+
+.mf-lib-row.mf-dir .mf-lib-icon { color: var(--accent); }
+
+.mf-lib-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mf-lib-name.mf-md { color: var(--fg); }
+
+.mf-lib-empty {
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.mf-lib-edit {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding-right: 8px;
+}
+
+.mf-lib-input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+}
+
+.mf-lib-menu {
+  position: fixed;
+  z-index: 70;
+  min-width: 150px;
+  padding: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--panel-shadow);
+}
+
+.mf-lib-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mf-lib-menu-item:hover { background: var(--code-bg); }
+
+.mf-lib-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* 左边缘拖拽条：与大纲侧栏对称 */
+#mf-library .mf-lib-resizer {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+#mf-library .mf-lib-resizer::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background .12s;
+}
+
+#mf-library .mf-lib-resizer:hover::after,
+#mf-library .mf-lib-resizer.mf-dragging::after {
+  background: var(--accent);
+  opacity: .55;
 }
 
 /* ---------- 查找替换 ---------- */
@@ -912,6 +1131,7 @@ body.mf-export #status,
 body.mf-export #mf-outline,
 body.mf-export #mf-outline-btn,
 body.mf-export #mf-theme-menu,
+body.mf-export #mf-library,
 body.mf-export #mf-search {
   display: none !important;
 }
@@ -996,7 +1216,7 @@ body.mf-export h3 { font-size: 1.2em; }
     overflow: visible !important;
   }
 
-  #status, #mf-outline, #mf-outline-btn, #mf-theme-menu, #mf-search { display: none !important; }
+  #status, #mf-outline, #mf-outline-btn, #mf-theme-menu, #mf-library, #mf-library-btn, #mf-search { display: none !important; }
   body.mf-outline-open #scroll { margin-left: 0 !important; }
   #scroll { height: auto !important; overflow: visible !important; }
   #write { max-width: none !important; padding: 0 !important; }

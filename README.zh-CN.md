@@ -50,6 +50,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、按 CJK 宽度算列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
 | **大纲** | `Cmd+Shift+O` 或窗口左上角的常驻按钮 —— 收起后按钮停在原位，再点一下即展开；拖右边缘可调宽（双击复位、宽度记忆） |
+| **文件树** | `Cmd+Shift+E` 或右上角按钮；目录懒加载、行内新建/重命名、删除进废纸篓、右键菜单、拖拽调宽 |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，以及自己放进主题文件夹的 CSS；状态栏主题菜单切换，`Cmd+Shift+L` 循环 |
 | **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，点一下弹出源码浮层直接改 |
@@ -165,6 +166,7 @@ cd markframe
 | 切换源码模式 | `Cmd+/` |
 | 查找替换 | `Cmd+F` |
 | 大纲 | `Shift+Cmd+O` |
+| 文件树 | `Shift+Cmd+E` |
 | 专注模式 / 打字机 | `Shift+Cmd+F` / `Shift+Cmd+T` |
 | 下一个主题 | `Shift+Cmd+L` |
 | 放大 / 缩小 / 实际大小 | `Cmd++` / `Cmd+-` / `Cmd+0` |
@@ -173,7 +175,7 @@ cd markframe
 
 ```bash
 NODE_PATH=./node_modules node test/engine.test.js      # 111 项 —— 核心闭环
-NODE_PATH=./node_modules node test/features.test.js    # 68 项 —— 功能
+NODE_PATH=./node_modules node test/features.test.js    # 77 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
 ```

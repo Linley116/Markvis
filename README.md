@@ -49,6 +49,7 @@ The whole editor is ~6,940 lines: 1,440 Swift, 3,760 web core, 600 features, 1,1
 | **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-aware column widths |
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
 | **Outline** | `Cmd+Shift+O` or the button pinned to the window’s top-left corner — it stays in place after collapsing, so the same click reopens it; drag its right edge to resize (double-click resets, width is remembered) |
+| **File tree** | `Cmd+Shift+E` or the top-right button; lazy directory loading, inline create/rename, delete to Trash, context menu, drag to resize |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord plus your own CSS files, switched from the status-bar theme menu (`Cmd+Shift+L` cycles) |
 | **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |
@@ -164,6 +165,7 @@ To keep the build artifact for distribution:
 | Toggle source mode | `Cmd+/` |
 | Find and replace | `Cmd+F` |
 | Outline | `Shift+Cmd+O` |
+| File tree | `Shift+Cmd+E` |
 | Focus mode / Typewriter | `Shift+Cmd+F` / `Shift+Cmd+T` |
 | Next theme | `Shift+Cmd+L` |
 | Zoom in / out / reset | `Cmd++` / `Cmd+-` / `Cmd+0` |
@@ -172,7 +174,7 @@ To keep the build artifact for distribution:
 
 ```bash
 NODE_PATH=./node_modules node test/engine.test.js      # 111 assertions — core loop
-NODE_PATH=./node_modules node test/features.test.js    # 68 assertions — features
+NODE_PATH=./node_modules node test/features.test.js    # 77 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
 ```
