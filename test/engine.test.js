@@ -5,11 +5,10 @@
 //   4. expand / 源码模式切换
 
 const path = require('path');
-const { chromium } = require('playwright-core');
+const { launchTestBrowser, closeTestBrowser } = require('./browser');
 
 const ROOT = path.resolve(__dirname, '..');
 const PAGE = 'file://' + path.join(ROOT, 'web', 'index.html');
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) {
@@ -18,7 +17,7 @@ function check(name, cond, extra) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchTestBrowser();
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -826,7 +825,7 @@ function check(name, cond, extra) {
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 
-  await browser.close();
+  await closeTestBrowser();
   console.log('\n===== ' + pass + ' passed, ' + fail + ' failed =====');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

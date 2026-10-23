@@ -4,10 +4,9 @@
 // 默认测 250 / 1000 / 2500 个块（约 1k / 4k / 10k 行）
 
 const path = require('path');
-const { chromium } = require('playwright-core');
+const { launchTestBrowser, closeTestBrowser } = require('./browser');
 
 const PAGE = 'file://' + path.join(__dirname, '..', 'web', 'index.html');
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 function makeDoc(blocks) {
   const out = [];
@@ -104,7 +103,7 @@ async function measure(page, blocks) {
   const sizes = process.argv.slice(2).map(Number).filter(Boolean);
   const targets = sizes.length ? sizes : [250, 1000, 2500];
 
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchTestBrowser();
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -124,6 +123,6 @@ async function measure(page, blocks) {
   }
 
   if (errors.length) console.log('\n运行时错误：\n' + errors.join('\n'));
-  await browser.close();
+  await closeTestBrowser();
   process.exit(errors.length ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
