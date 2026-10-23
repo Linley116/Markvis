@@ -1161,9 +1161,8 @@
     }
     renderDoc();
     updateWordCount();
-    if (docLoadedHooks && docLoadedHooks.length) {
-      docLoadedHooks.forEach(function (fn) { try { fn(); } catch (e) { console.warn(e); } });
-    }
+    // 文档加载钩子统一在 __loadContent 里发（带路径），这里不再发，
+    // 否则源码模式来回切换也会触发一遍
   }
 
   // =====================================================================
@@ -2637,8 +2636,11 @@
 
   var docLoadedHooks = [];
 
+  window.__currentFilePath = '';
+
   window.__loadContent = function (path, text, title) {
     docBaseDir = path ? String(path).replace(/[^/]*$/, '') : '';
+    window.__currentFilePath = path || '';
     stackClear(undoStack);
     stackClear(redoStack);
     lastGroup = null;
@@ -2649,6 +2651,10 @@
       source.value = getMarkdown();
     }
     write.focus();
+    // 文档加载钩子带上路径：文件树靠它跟随根目录 / 高亮当前文件
+    if (docLoadedHooks && docLoadedHooks.length) {
+      docLoadedHooks.forEach(function (fn) { try { fn(path || ''); } catch (e) { console.warn(e); } });
+    }
   };
 
   window.__onSaved = function (path) {
@@ -3301,6 +3307,11 @@
   loadMarkdown(DEMO);
   initSpell();
   write.focus();
+
+  // 首屏演示文档也走一遍加载钩子（和打开文档一致，路径为空）
+  if (docLoadedHooks && docLoadedHooks.length) {
+    docLoadedHooks.forEach(function (fn) { try { fn(''); } catch (e) { console.warn(e); } });
+  }
 
   // 把未捕获异常回传原生，避免 Web 层错误静默
   window.addEventListener('error', function (e) {

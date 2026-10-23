@@ -8,6 +8,7 @@
 import Cocoa
 import WebKit
 import PDFKit
+import CoreServices // FSEvents：文件树监听根目录变化
 
 // MARK: - 桥
 
@@ -71,6 +72,7 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
 
         case "app.ready":
             NSLog("MarkFrame: web layer ready")
+            controller?.startLibraryWatch() // 文件树开始监听根目录变化
             // 构建自检：仅当显式设置 MARKFRAME_SELFTEST 时落一份就绪标记
             if let marker = ProcessInfo.processInfo.environment["MARKFRAME_SELFTEST"] {
                 let info = (data as? [String: Any])?["version"] as? String ?? "?"
@@ -135,11 +137,20 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
             var isDir: ObjCBool = false
             if !p.isEmpty, FileManager.default.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue {
                 EditorWindowController.libraryRoot = p
+                controller?.startLibraryWatch() // 换根了，监听跟着换
             }
             respond(["root": controller?.effectiveLibraryRoot() ?? ""])
 
         case "library.chooseRoot":
             controller?.chooseLibraryRoot()
+            respond(nil)
+
+        case "library.copyPath":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            if !p.isEmpty {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(p, forType: .string)
+            }
             respond(nil)
 
         case "library.create":
@@ -280,6 +291,13 @@ final class EditorWindowController: NSWindowController {
 
     /// 未命名文档的崩溃恢复文件（有路径的文档直接自动保存到原文件，不需要它）
     private var recoveryFile: URL?
+
+    // MARK: 文件树监听（Typora：watches for file changes in the opened folder）
+
+    /// FSEvents 流：监听根目录（含子目录）变化，通知 Web 层刷新文件树
+    private var libWatchStream: FSEventStreamRef?
+    private var libWatchRoot: String = ""
+    private var libWatchLastFire: TimeInterval = 0
 
     // MARK: 崩溃恢复
 
@@ -440,6 +458,9 @@ final class EditorWindowController: NSWindowController {
         return url
     }
 
+    /// Typora 的文件树只显示它支持的类型（Markdown / 文本），目录永远显示
+    private static let librarySupportedExts: Set<String> = ["md", "markdown", "mdown", "mkdn", "mkd", "txt"]
+
     func libraryList(path raw: String, root: String? = nil) -> [[String: Any]] {
         let root = root ?? effectiveLibraryRoot()
         let dir: URL
@@ -458,6 +479,10 @@ final class EditorWindowController: NSWindowController {
         var out: [[String: Any]] = []
         for url in items where !url.lastPathComponent.hasPrefix(".") {
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            // 文件按 Typora 的类型过滤；目录一律保留（不然什么都展不开）
+            if !isDir && !Self.librarySupportedExts.contains(url.pathExtension.lowercased()) {
+                continue
+            }
             out.append([
                 "name": url.lastPathComponent,
                 "path": url.path,
@@ -553,8 +578,66 @@ final class EditorWindowController: NSWindowController {
         panel.beginSheetModal(for: window!) { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             Self.libraryRoot = url.path
+            self?.startLibraryWatch()
             self?.runJS("window.MFLibrary && window.MFLibrary.rootChanged()")
         }
+    }
+
+    // MARK: 文件树变化监听（Typora：watches for file changes in the opened folder）
+
+    /// 在当前根目录上开一条 FSEvents（目录路径即监听整棵子树），
+    /// 外部（访达 / 其他应用）增删改名时通知 Web 层刷新。
+    func startLibraryWatch() {
+        let root = effectiveLibraryRoot()
+        guard !root.isEmpty, FileManager.default.fileExists(atPath: root) else { return }
+        if root == libWatchRoot, libWatchStream != nil { return } // 已经盯着了
+        stopLibraryWatch()
+        libWatchRoot = root
+
+        var ctx = FSEventStreamContext(
+            version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil, release: nil, copyDescription: nil
+        )
+        let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes)
+        // sinceNow + 0.5s 合并窗口：一批改动只通知一次
+        libWatchStream = FSEventStreamCreate(
+            nil,
+            { _, info, _, _, _, _ in
+                guard let info else { return }
+                let me = Unmanaged<EditorWindowController>.fromOpaque(info).takeUnretainedValue()
+                DispatchQueue.main.async { me.libraryDirDidChange() }
+            },
+            &ctx, [root] as CFArray,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.5, flags
+        )
+        if let stream = libWatchStream {
+            FSEventStreamSetDispatchQueue(stream, DispatchQueue.main)
+            FSEventStreamStart(stream)
+        }
+    }
+
+    func stopLibraryWatch() {
+        if let stream = libWatchStream {
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+        }
+        libWatchStream = nil
+        libWatchRoot = ""
+    }
+
+    /// FSEvents 回调：合并窗口已经做了节流，这里再兜一层最小间隔
+    private func libraryDirDidChange() {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - libWatchLastFire > 0.3 else { return }
+        libWatchLastFire = now
+        mfLog("library watch: \(libWatchRoot) changed")
+        runJS("window.MFLibrary && window.MFLibrary.changed()")
+    }
+
+    deinit {
+        stopLibraryWatch()
     }
 
     func openThemesFolder() {

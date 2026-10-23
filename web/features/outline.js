@@ -1,4 +1,8 @@
-/* 大纲侧栏：标题树 + 点击跳转 + 当前节高亮 */
+/* 大纲面板：标题树 + 点击跳转 + 当前节高亮
+ *
+ * 面板外壳（侧栏、tab、宽度、开关）归 sidebar.js，这里只负责
+ * 往 #mf-pane-outline 里渲染列表；切到本 tab 时重建一次。
+ */
 
 (function () {
   'use strict';
@@ -7,82 +11,22 @@
   var write = MF.write;
   var scroll = document.getElementById('scroll');
 
-  var aside, listEl, resizer, fab;
+  var listEl = null;
   var timer = null;
-  var activeId = null;
+  var built = false;
 
-  var MIN_W = 180, MAX_W = 480, DEFAULT_W = 240;
+  function pane() { return document.getElementById('mf-pane-outline'); }
 
   function build() {
-    aside = document.createElement('aside');
-    aside.id = 'mf-outline';
-    aside.innerHTML =
-      '<div class="mf-outline-head">' +
-        '<span class="mf-outline-title">大纲</span>' +
-      '</div>' +
-      '<nav id="mf-outline-list"></nav>' +
-      '<div class="mf-outline-resizer" title="拖动调整宽度，双击复位"></div>';
-
-    document.body.appendChild(aside);
-    listEl = aside.querySelector('#mf-outline-list');
-    resizer = aside.querySelector('.mf-outline-resizer');
-    wireResizer();
-  }
-
-  /** 侧栏宽度走 CSS 变量：侧栏本身和正文的左外边距都读它 */
-  function applyWidth(w) {
-    var width = Math.max(MIN_W, Math.min(MAX_W, Math.round(w)));
-    document.documentElement.style.setProperty('--mf-outline-w', width + 'px');
-    return width;
-  }
-
-  function saveWidth(w) {
-    try { localStorage.setItem('mf.outline.width', String(w)); } catch (e) {}
-  }
-
-  function loadWidth() {
-    var w = NaN;
-    try { w = parseInt(localStorage.getItem('mf.outline.width') || '', 10); } catch (e) {}
-    applyWidth(isNaN(w) ? DEFAULT_W : w);
-  }
-
-  function wireResizer() {
-    var dragging = false;
-
-    resizer.addEventListener('pointerdown', function (e) {
-      dragging = true;
-      resizer.classList.add('mf-dragging');
-      document.body.classList.add('mf-resizing');
-      if (resizer.setPointerCapture) { try { resizer.setPointerCapture(e.pointerId); } catch (err) {} }
-      e.preventDefault();
-    });
-
-    window.addEventListener('pointermove', function (e) {
-      if (!dragging) return;
-      applyWidth(e.clientX);
-    });
-
-    window.addEventListener('pointerup', function () {
-      if (!dragging) return;
-      dragging = false;
-      resizer.classList.remove('mf-dragging');
-      document.body.classList.remove('mf-resizing');
-      var w = parseInt(getComputedStyle(document.documentElement)
-        .getPropertyValue('--mf-outline-w'), 10);
-      if (!isNaN(w)) saveWidth(w);
-    });
-
-    resizer.addEventListener('dblclick', function () {
-      saveWidth(applyWidth(DEFAULT_W));
-    });
-  }
-
-  /** 左上角按钮：位置固定不动，只翻转 aria 状态和提示文案 */
-  function syncButton(open) {
-    if (!fab) return;
-    fab.setAttribute('aria-pressed', open ? 'true' : 'false');
-    fab.setAttribute('aria-label', open ? '隐藏大纲' : '显示大纲');
-    fab.title = open ? '隐藏大纲 (Cmd+Shift+O)' : '显示大纲 (Cmd+Shift+O)';
+    if (!listEl) {
+      var host = pane();
+      if (!host) return;
+      listEl = document.createElement('nav');
+      listEl.id = 'mf-outline-list';
+      host.appendChild(listEl);
+    }
+    built = true;
+    buildList();
   }
 
   function buildList() {
@@ -161,41 +105,35 @@
 
   function scheduleBuild() {
     clearTimeout(timer);
-    timer = setTimeout(buildList, 260);
-  }
-
-  function setOpen(open) {
-    document.body.classList.toggle('mf-outline-open', open);
-    try { localStorage.setItem('mf.outline', open ? '1' : '0'); } catch (e) {}
-    syncButton(open);
-    if (open) buildList();
-  }
-
-  function toggle() {
-    setOpen(!document.body.classList.contains('mf-outline-open'));
+    timer = setTimeout(function () {
+      // 只在侧栏开着且大纲 tab 激活时才重建，省掉无谓的 DOM 操作
+      if (window.MFSidebar && window.MFSidebar.isOpen() &&
+          window.MFSidebar.activeTab() === 'outline') {
+        buildList();
+      }
+    }, 260);
   }
 
   // -------- 启动 --------
 
   build();
-  loadWidth();
 
-  // 左上角常驻按钮：不想记快捷键也能开关；收起后它还在原地，点一下就能展开
-  fab = document.getElementById('mf-outline-btn');
-  if (fab) {
-    fab.addEventListener('click', function () { toggle(); });
+  // 切到大纲 tab 时重建（文档可能在我们看不见的时候换过了）
+  if (window.MFSidebar) {
+    window.MFSidebar.onTabChange(function (t) {
+      if (t === 'outline') buildList();
+    });
   }
 
-  var saved = null;
-  try { saved = localStorage.getItem('mf.outline'); } catch (e) {}
-  setOpen(saved === null ? true : saved === '1');
-
   scroll.addEventListener('scroll', function () {
-    if (document.body.classList.contains('mf-outline-open')) markActive();
+    if (window.MFSidebar && window.MFSidebar.isOpen() &&
+        window.MFSidebar.activeTab() === 'outline') {
+      markActive();
+    }
   }, { passive: true });
 
   listEl.addEventListener('click', function (e) {
-    var item = e.target.closest('.mf-outline-item');
+    var item = e.target.closest ? e.target.closest('.mf-outline-item') : null;
     if (!item) return;
     jump(parseInt(item.getAttribute('data-idx'), 10));
   });
@@ -204,14 +142,7 @@
   var mo = new MutationObserver(scheduleBuild);
   mo.observe(write, { childList: true, characterData: true, subtree: true });
 
-  MF.onDocLoaded(function () { buildList(); });
+  MF.onDocLoaded(function () { if (built) buildList(); });
 
-  document.addEventListener('keydown', function (e) {
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'o' || e.key === 'O')) {
-      e.preventDefault();
-      toggle();
-    }
-  });
-
-  window.MFOutline = { toggle: toggle, refresh: buildList };
+  window.MFOutline = { toggle: function () { window.MFSidebar && window.MFSidebar.toggle(); }, refresh: buildList };
 })();

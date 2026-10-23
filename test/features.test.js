@@ -124,7 +124,7 @@ const TABLE_MD = [
   const outline = await page.evaluate(() => {
     const items = [...document.querySelectorAll('.mf-outline-item')];
     return {
-      open: document.body.classList.contains('mf-outline-open'),
+      open: document.body.classList.contains('mf-sidebar-open'),
       count: items.length,
       levels: items.map(i => i.getAttribute('data-level')),
       texts: items.map(i => i.textContent)
@@ -144,7 +144,7 @@ const TABLE_MD = [
   check('点击大纲发生滚动', jumped.after !== jumped.before, JSON.stringify(jumped));
 
   await page.keyboard.press('Meta+Shift+O');
-  const collapsed = await page.evaluate(() => document.body.classList.contains('mf-outline-open'));
+  const collapsed = await page.evaluate(() => document.body.classList.contains('mf-sidebar-open'));
   check('Cmd+Shift+O 收起侧栏', collapsed === false);
 
   console.log('\n[4.1] 左上角大纲开关与拖拽调宽');
@@ -155,7 +155,7 @@ const TABLE_MD = [
       return [Math.round(r.left), Math.round(r.top), Math.round(r.width)];
     };
     const state = () => ({
-      open: document.body.classList.contains('mf-outline-open'),
+      open: document.body.classList.contains('mf-sidebar-open'),
       pressed: btn.getAttribute('aria-pressed'),
       title: btn.title,
       rect: rect(),
@@ -186,19 +186,19 @@ const TABLE_MD = [
         fab.closedAgain.open === false && fab.closedAgain.pressed === 'false' &&
         fab.closedAgain.rect.join() === fab.closedAtStart.rect.join(),
         JSON.stringify(fab.closedAgain));
-  check('收起后提示文案变为「显示大纲」', /显示大纲/.test(fab.closedAgain.title), fab.closedAgain.title);
+  check('收起后提示文案变为「显示侧栏」', /显示侧栏/.test(fab.closedAgain.title), fab.closedAgain.title);
   check('同一位置再点可以重新展开', fab.reopened.open === true && fab.reopened.pressed === 'true',
         JSON.stringify(fab.reopened));
   check('侧栏页眉不再有自己的收起按钮', fab.hasHeaderClose === false);
 
   const resized = await page.evaluate(async () => {
-    if (!document.body.classList.contains('mf-outline-open')) {
+    if (!document.body.classList.contains('mf-sidebar-open')) {
       document.getElementById('mf-outline-btn').click();
     }
     await new Promise(r => setTimeout(r, 60));
-    const r = document.querySelector('.mf-outline-resizer');
+    const r = document.querySelector('.mf-sidebar-resizer');
     const rect = r.getBoundingClientRect();
-    const widthOf = () => Math.round(document.getElementById('mf-outline').getBoundingClientRect().width);
+    const widthOf = () => Math.round(document.getElementById('mf-sidebar').getBoundingClientRect().width);
 
     r.dispatchEvent(new PointerEvent('pointerdown', {
       bubbles: true, pointerId: 1, clientX: rect.left + 2, clientY: rect.top + 40
@@ -209,7 +209,7 @@ const TABLE_MD = [
     window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
     await new Promise(res => setTimeout(res, 40));
 
-    const saved = localStorage.getItem('mf.outline.width');
+    const saved = localStorage.getItem('mf.sidebar.width');
     const margin = getComputedStyle(document.getElementById('scroll')).marginLeft;
 
     r.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
@@ -449,7 +449,7 @@ const TABLE_MD = [
   check('序列化保留 front matter', rich.md.indexOf('---\nname: x') === 0, rich.md.slice(0, 20));
   check('序列化保留列表编号', /^3\. 第三$/m.test(rich.md));
 
-  console.log('\n[12] 文件树（F9，桩掉 library.* 桥）');
+  console.log('\n[12] 文件树（F9，左侧统一侧栏，桩掉 library.* 桥）');
   const lib = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const calls = [];
@@ -464,6 +464,7 @@ const TABLE_MD = [
     window.bridge.callHandler = function (name, data, cb) {
       calls.push({ name: name, data: data });
       if (name === 'library.root' && cb) return cb({ root: '/root' });
+      if (name === 'library.setRoot' && cb) return cb({ root: data && data.path });
       if (name === 'library.list' && cb) {
         return cb(data && data.path === '/root/notes' ? sub : tree);
       }
@@ -474,8 +475,20 @@ const TABLE_MD = [
 
     window.MFLibrary.rootChanged();
     await wait(120);
-    window.MFLibrary.open();
+    window.MFLibrary.open();   // 打开侧栏并切到「文件」tab
     await wait(120);
+
+    const paneVisible = () => {
+      const files = document.getElementById('mf-pane-files');
+      const outline = document.getElementById('mf-pane-outline');
+      return {
+        sidebarOpen: document.body.classList.contains('mf-sidebar-open'),
+        activeTab: window.MFSidebar.activeTab(),
+        filesShown: !!files && !files.hidden,
+        outlineHidden: !!outline && outline.hidden
+      };
+    };
+    const tabState = paneVisible();
 
     const rows = Array.from(document.querySelectorAll('.mf-lib-row')).map(r => ({
       name: r.querySelector('.mf-lib-name').textContent,
@@ -491,9 +504,10 @@ const TABLE_MD = [
     await wait(60);
     const openCall = calls.filter(c => c.name === 'document.openPath').pop();
 
-    const panel = document.getElementById('mf-library');
+    // 面板在左侧：贴左边缘，正文让出左边距
+    const panel = document.getElementById('mf-sidebar');
     const rect = panel.getBoundingClientRect();
-    const margin = getComputedStyle(document.getElementById('scroll')).marginRight;
+    const margin = getComputedStyle(document.getElementById('scroll')).marginLeft;
 
     // 新建文件（行内输入 + Enter）
     document.querySelector('[data-act="newfile"]').click();
@@ -514,27 +528,61 @@ const TABLE_MD = [
     await wait(100);
     const deleteCall = calls.filter(c => c.name === 'library.delete').pop();
 
-    document.querySelector('[data-act="close"]').click();
+    // Typora 行为：打开文档 → 根目录跟到它的父文件夹，并高亮当前文件
+    window.MFLibrary.followDocument('/root/notes/deep.md');
+    await wait(150);
+    const followed = {
+      setRootCall: calls.filter(c => c.name === 'library.setRoot').pop(),
+      rows: Array.from(document.querySelectorAll('.mf-lib-row')).map(r => ({
+        name: r.querySelector('.mf-lib-name').textContent,
+        current: r.classList.contains('mf-lib-current')
+      })),
+      rootTitle: document.querySelector('.mf-lib-root-name').textContent
+    };
+
+    // 底部文件夹操作条（Typora 放在侧栏底部）
+    const rootbar = {
+      hasOpen: !!Array.from(document.querySelectorAll('.mf-lib-rootbar [data-act]'))
+        .find(b => b.getAttribute('data-act') === 'root'),
+      hasRefresh: !!Array.from(document.querySelectorAll('.mf-lib-rootbar [data-act]'))
+        .find(b => b.getAttribute('data-act') === 'refresh')
+    };
+
+    window.MFSidebar.toggle();   // 收起整个侧栏
     await wait(60);
 
     window.bridge.callHandler = orig;
     return {
-      rows, afterExpand, openCall,
-      rectRight: Math.round(window.innerWidth - rect.right),
+      tabState, rows, afterExpand, openCall,
+      rectLeft: Math.round(rect.left),
       margin, createCall, deleteCall,
-      closed: !document.body.classList.contains('mf-lib-open')
+      followed, rootbar,
+      closed: !document.body.classList.contains('mf-sidebar-open')
     };
   });
   check('根目录列出条目', lib.rows.length === 3 && lib.rows[0].name === 'notes', JSON.stringify(lib.rows));
   check('目录排在文件前', lib.rows[0].dir === true && lib.rows[1].dir === false, JSON.stringify(lib.rows));
   check('点目录展开子级', lib.afterExpand.indexOf('deep.md') >= 0, JSON.stringify(lib.afterExpand));
   check('点文件走 document.openPath', lib.openCall && lib.openCall.data.path === '/root/a.md', JSON.stringify(lib.openCall));
-  check('面板贴在右侧且正文让位', lib.rectRight === 0 && lib.margin === '240px', JSON.stringify([lib.rectRight, lib.margin]));
+  check('打开即切到文件 tab 并隐藏大纲',
+        lib.tabState.activeTab === 'files' && lib.tabState.filesShown === true &&
+        lib.tabState.outlineHidden === true && lib.tabState.sidebarOpen === true,
+        JSON.stringify(lib.tabState));
+  check('面板贴在左侧且正文让位', lib.rectLeft === 0 && lib.margin === '240px', JSON.stringify([lib.rectLeft, lib.margin]));
   check('新建文件带上目录与类型',
         lib.createCall && lib.createCall.data.path === '/root' &&
         lib.createCall.data.name === 'hello.md' && lib.createCall.data.kind === 'file',
         JSON.stringify(lib.createCall));
   check('删除走 library.delete', lib.deleteCall && lib.deleteCall.data.path === '/root/b.txt', JSON.stringify(lib.deleteCall));
+  check('根目录跟随打开的文档（Typora 行为）',
+        lib.followed.setRootCall && lib.followed.setRootCall.data.path === '/root/notes',
+        JSON.stringify(lib.followed.setRootCall));
+  check('当前文件在树里高亮',
+        lib.followed.rows.length === 1 && lib.followed.rows[0].name === 'deep.md' &&
+        lib.followed.rows[0].current === true,
+        JSON.stringify(lib.followed.rows));
+  check('底部条显示当前根目录', lib.followed.rootTitle === 'notes', lib.followed.rootTitle);
+  check('底部有「打开文件夹…」和「刷新」', lib.rootbar.hasOpen && lib.rootbar.hasRefresh, JSON.stringify(lib.rootbar));
   check('可以收起', lib.closed === true);
 
   console.log('\n[11] 运行时错误');

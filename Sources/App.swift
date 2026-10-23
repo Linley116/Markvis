@@ -269,9 +269,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let spell = viewMenu.addItem(withTitle: L10n.t("Check Spelling While Typing", "输入时检查拼写"),
                                      action: #selector(toggleSpell(_:)), keyEquivalent: ";")
         spell.keyEquivalentModifierMask = [.command]
-        let outline = viewMenu.addItem(withTitle: L10n.t("Toggle Outline", "显示/隐藏大纲"),
+        let sidebar = viewMenu.addItem(withTitle: L10n.t("Toggle Sidebar", "显示/隐藏侧栏"),
                                        action: #selector(toggleOutline(_:)), keyEquivalent: "O")
-        outline.keyEquivalentModifierMask = [.command, .shift]
+        sidebar.keyEquivalentModifierMask = [.command, .shift]
+        let files = viewMenu.addItem(withTitle: L10n.t("Show Files", "显示文件树"),
+                                     action: #selector(showFiles(_:)), keyEquivalent: "E")
+        files.keyEquivalentModifierMask = [.command, .shift]
         let focus = viewMenu.addItem(withTitle: L10n.t("Focus Mode", "专注模式"),
                                      action: #selector(toggleFocusMode(_:)), keyEquivalent: "F")
         focus.keyEquivalentModifierMask = [.command, .shift]
@@ -376,7 +379,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openThemeFolder(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.openFolder()") }
     @objc private func reloadThemes(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.reload()") }
     @objc private func showFind(_ sender: Any?) { js?("window.MFSearch && window.MFSearch.show()") }
-    @objc private func toggleOutline(_ sender: Any?) { js?("window.MFOutline && window.MFOutline.toggle()") }
+    @objc private func toggleOutline(_ sender: Any?) { js?("window.MFSidebar && window.MFSidebar.toggle()") }
+    @objc private func showFiles(_ sender: Any?) { js?("window.MFSidebar && window.MFSidebar.show('files')") }
     @objc private func toggleFocusMode(_ sender: Any?) { js?("window.MFFocus && window.MFFocus.toggleFocus()") }
     @objc private func toggleTypewriter(_ sender: Any?) { js?("window.MFFocus && window.MFFocus.toggleTypewriter()") }
     @objc private func nextTheme(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.cycle()") }

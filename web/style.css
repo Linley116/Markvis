@@ -569,14 +569,14 @@ a:hover { text-decoration: underline; }
 
 ::selection { background: rgba(65,131,196,.22); }
 
-/* ---------- 大纲侧栏 ---------- */
+/* ---------- 左侧统一侧栏（对齐 Typora：一个侧栏，「大纲 / 文件」两个 tab） ---------- */
 
-#mf-outline {
+#mf-sidebar {
   position: fixed;
   left: 0;
   top: 0;
   bottom: 30px;
-  width: var(--mf-outline-w, 240px);
+  width: var(--mf-sidebar-w, 240px);
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -586,19 +586,66 @@ a:hover { text-decoration: underline; }
   z-index: 20;
 }
 
-body.mf-outline-open #mf-outline { transform: none; }
+body.mf-sidebar-open #mf-sidebar { transform: none; }
 
-body.mf-outline-open #scroll {
-  margin-left: var(--mf-outline-w, 240px);
+body.mf-sidebar-open #scroll {
+  margin-left: var(--mf-sidebar-w, 240px);
 }
 
 #scroll { transition: margin-left .18s ease; }
 
 /* 拖拽调宽时别让过渡拖后腿 */
-body.mf-resizing #scroll { transition: none; }
+body.mf-sidebar-resizing #scroll { transition: none; }
+
+/* tab 栏：图标 tab，左侧留出 46px 给左上角的常驻开关 */
+.mf-side-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 10px 10px 6px 46px;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.mf-side-tab {
+  width: 30px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .12s, background .12s;
+}
+
+.mf-side-tab:hover { background: var(--code-bg); color: var(--fg); }
+
+.mf-side-tab.mf-on { color: var(--accent); background: var(--code-bg); }
+
+.mf-side-tab svg { display: block; }
+
+/* 面板容器：两个 pane 叠在一起，靠 hidden 切换 */
+.mf-side-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mf-side-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mf-side-pane[hidden] { display: none; }
 
 /* 右边缘的拖拽条：拖动调整宽度，双击复位 */
-.mf-outline-resizer {
+.mf-sidebar-resizer {
   position: absolute;
   top: 0;
   right: -3px;
@@ -608,7 +655,7 @@ body.mf-resizing #scroll { transition: none; }
   z-index: 3;
 }
 
-.mf-outline-resizer::after {
+.mf-sidebar-resizer::after {
   content: '';
   position: absolute;
   left: 2px;
@@ -619,29 +666,27 @@ body.mf-resizing #scroll { transition: none; }
   transition: background .12s;
 }
 
-.mf-outline-resizer:hover::after,
-.mf-outline-resizer.mf-dragging::after {
+.mf-sidebar-resizer:hover::after,
+.mf-sidebar-resizer.mf-dragging::after {
   background: var(--accent);
   opacity: .55;
 }
 
-/* ---------- 左上角大纲开关 ----------
-   常驻在窗口左上角：侧栏展开时压在侧栏页眉上，收起后停在原处浮在正文上，
+/* ---------- 左上角侧栏开关 ----------
+   常驻在窗口左上角：侧栏展开时压在 tab 栏上，收起后停在原处浮在正文上，
    所以「收起」和「再展开」是同一个按钮、同一个位置。 */
 
-
 #mf-outline-btn .mf-fab-fill { opacity: 0; transition: opacity .12s; }
-body.mf-outline-open #mf-outline-btn .mf-fab-fill { opacity: .22; }
-body.mf-outline-open #mf-outline-btn:hover { background: var(--code-bg); color: var(--fg); }
+body.mf-sidebar-open #mf-outline-btn .mf-fab-fill { opacity: .22; }
+body.mf-sidebar-open #mf-outline-btn:hover { background: var(--code-bg); color: var(--fg); }
 
 /* 收起后浮在正文上：补一点底色，不然白底上看不见 */
-body:not(.mf-outline-open) #mf-outline-btn {
+body:not(.mf-sidebar-open) #mf-outline-btn {
   background: var(--code-bg);
   border-color: var(--border);
   opacity: .8;
 }
 
-/* 左上角（大纲）/ 右上角（文件树）两个常驻开关共用一套外观 */
 .mf-fab {
   position: fixed;
   top: 10px;
@@ -657,50 +702,20 @@ body:not(.mf-outline-open) #mf-outline-btn {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: color .12s, background .12s, border-color .12s, opacity .12s, right .18s ease;
+  transition: color .12s, background .12s, border-color .12s, opacity .12s;
 }
 
 .mf-fab svg { display: block; }
 
 #mf-outline-btn { left: 10px; }
-#mf-library-btn { right: 10px; }
 
-/* 面板展开时开关挪到面板外侧，免得压住面板自己的按钮 */
-body.mf-lib-open #mf-library-btn { right: calc(var(--mf-lib-w, 240px) + 10px); }
-
-body:not(.mf-outline-open) #mf-outline-btn:hover {
+body:not(.mf-sidebar-open) #mf-outline-btn:hover {
   opacity: 1;
   color: var(--accent);
   border-color: var(--accent);
 }
 
-/* 文件树开关：收起时同样浮在正文上，展开时压在面板左侧 */
-body:not(.mf-lib-open) #mf-library-btn {
-  background: var(--code-bg);
-  border-color: var(--border);
-  opacity: .8;
-}
-
-body:not(.mf-lib-open) #mf-library-btn:hover {
-  opacity: 1;
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-body.mf-lib-open #mf-library-btn:hover { background: var(--code-bg); color: var(--fg); }
-
-.mf-outline-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  /* 左边留出 46px 给左上角的常驻开关，标题不会被压住 */
-  padding: 12px 14px 8px 46px;
-  font-size: 11px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  user-select: none;
-}
+/* ---------- 大纲面板 ---------- */
 
 #mf-outline-list {
   flex: 1;
@@ -738,38 +753,14 @@ body.mf-lib-open #mf-library-btn:hover { background: var(--code-bg); color: var(
   color: var(--muted);
 }
 
-/* ---------- 文件树侧栏（F9，右侧） ---------- */
-
-#mf-library {
-  position: fixed;
-  right: 0;
-  top: 0;
-  bottom: 30px;
-  width: var(--mf-lib-w, 240px);
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  border-left: 1px solid var(--border);
-  transform: translateX(100%);
-  transition: transform .18s ease;
-  z-index: 20;
-  font-size: 12.5px;
-}
-
-body.mf-lib-open #mf-library { transform: none; }
-
-body.mf-lib-open #scroll { margin-right: var(--mf-lib-w, 240px); }
-
-#scroll { transition: margin-left .18s ease, margin-right .18s ease; }
-
-body.mf-lib-resizing #scroll { transition: none; }
+/* ---------- 文件树面板（Typora 的 Files Sidebar） ---------- */
 
 .mf-lib-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 10px 8px 8px 14px;
+  padding: 8px 8px 8px 14px;
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
@@ -798,6 +789,9 @@ body.mf-lib-resizing #scroll { transition: none; }
   width: 22px;
   height: 22px;
   border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mf-lib-act:hover { background: var(--code-bg); color: var(--fg); }
@@ -824,6 +818,14 @@ body.mf-lib-resizing #scroll { transition: none; }
 .mf-lib-row:hover { background: var(--code-bg); }
 
 .mf-lib-row.mf-dir { color: var(--fg); font-weight: 500; }
+
+/* 当前打开的文档：高亮这一行（Typora 也会标出打开的文件） */
+.mf-lib-row.mf-lib-current {
+  background: var(--code-bg);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.mf-lib-row.mf-lib-current .mf-lib-name { color: var(--accent); font-weight: 500; }
 
 .mf-lib-twisty {
   width: 12px;
@@ -907,32 +909,24 @@ body.mf-lib-resizing #scroll { transition: none; }
   background: var(--border);
 }
 
-/* 左边缘拖拽条：与大纲侧栏对称 */
-#mf-library .mf-lib-resizer {
-  position: absolute;
-  top: 0;
-  left: -3px;
-  width: 6px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 3;
+/* 底部当前文件夹操作条（Typora 把文件夹操作放在侧栏底部） */
+.mf-lib-rootbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 12px;
+  border-top: 1px solid var(--border);
+  user-select: none;
 }
 
-#mf-library .mf-lib-resizer::after {
-  content: '';
-  position: absolute;
-  right: 2px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: transparent;
-  transition: background .12s;
-}
-
-#mf-library .mf-lib-resizer:hover::after,
-#mf-library .mf-lib-resizer.mf-dragging::after {
-  background: var(--accent);
-  opacity: .55;
+.mf-lib-root-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
 }
 
 /* ---------- 查找替换 ---------- */
@@ -1128,10 +1122,9 @@ body.mf-focus #write > .md-block.mf-focus-current {
 /* ---------- 导出 / 打印 ---------- */
 
 body.mf-export #status,
-body.mf-export #mf-outline,
+body.mf-export #mf-sidebar,
 body.mf-export #mf-outline-btn,
 body.mf-export #mf-theme-menu,
-body.mf-export #mf-library,
 body.mf-export #mf-search {
   display: none !important;
 }
@@ -1216,8 +1209,8 @@ body.mf-export h3 { font-size: 1.2em; }
     overflow: visible !important;
   }
 
-  #status, #mf-outline, #mf-outline-btn, #mf-theme-menu, #mf-library, #mf-library-btn, #mf-search { display: none !important; }
-  body.mf-outline-open #scroll { margin-left: 0 !important; }
+  #status, #mf-sidebar, #mf-outline-btn, #mf-theme-menu, #mf-search { display: none !important; }
+  body.mf-sidebar-open #scroll { margin-left: 0 !important; }
   #scroll { height: auto !important; overflow: visible !important; }
   #write { max-width: none !important; padding: 0 !important; }
 
