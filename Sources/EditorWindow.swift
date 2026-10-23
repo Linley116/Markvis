@@ -175,6 +175,77 @@ final class EditorWindowController: NSWindowController {
     private var webRoot: URL?
     private var readRoot: URL?
 
+    /// 未命名文档的崩溃恢复文件（有路径的文档直接自动保存到原文件，不需要它）
+    private var recoveryFile: URL?
+
+    // MARK: 崩溃恢复
+
+    /// ~/Library/Application Support/MarkFrame/Recovery
+    static let recoveryDir: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return base.appendingPathComponent("MarkFrame/Recovery", isDirectory: true)
+    }()
+
+    /// 上次会话遗留的恢复文件（按修改时间倒序，超过 30 天的顺手删掉）
+    static func pendingRecoveryFiles() -> [URL] {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(
+            at: recoveryDir,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]) else { return [] }
+
+        let cutoff = Date().addingTimeInterval(-30 * 24 * 3600)
+        var fresh: [(URL, Date)] = []
+        for url in items where url.pathExtension == "md" {
+            let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            if date < cutoff {
+                try? fm.removeItem(at: url)
+            } else {
+                fresh.append((url, date))
+            }
+        }
+        return fresh.sorted { $0.1 > $1.1 }.map { $0.0 }
+    }
+
+    static func discardRecoveryFiles(_ urls: [URL]) {
+        for url in urls { try? FileManager.default.removeItem(at: url) }
+    }
+
+    /// 内容落进恢复目录（只对未命名文档调用）
+    private func writeRecovery(content: String) {
+        let dir = Self.recoveryDir
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if recoveryFile == nil {
+            let stamp = Int(Date().timeIntervalSince1970)
+            let rand = UUID().uuidString.prefix(6).lowercased()
+            recoveryFile = dir.appendingPathComponent("untitled-\(stamp)-\(rand).md")
+        }
+        guard let url = recoveryFile else { return }
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            mfLog("recovery write failed: \(error)")
+        }
+    }
+
+    /// 保存到真实文件、或用户主动关窗后，恢复文件就没用了
+    func discardRecovery() {
+        guard let url = recoveryFile else { return }
+        try? FileManager.default.removeItem(at: url)
+        recoveryFile = nil
+    }
+
+    /// 从恢复文件恢复成一个「未命名但已编辑」的窗口
+    func restore(from url: URL) {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        recoveryFile = url
+        applyContent(path: "", content: text, title: L10n.t("Recovered", "已恢复"))
+        window?.isDocumentEdited = true
+        mfLog("restored \(url.lastPathComponent) (\(text.count) chars)")
+    }
+
     convenience init() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1080, height: 760),
@@ -236,6 +307,15 @@ final class EditorWindowController: NSWindowController {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     self?.writePDF(to: URL(fileURLWithPath: pdfPath))
                 }
+            }
+        }
+
+        // 自动化验证入口：设置 MARKFRAME_TEST_RECOVERY=<文本> 时模拟一次自动保存，
+        // 用来验证「未命名文档 → 恢复目录」这条链路（正常由 web 层每 1.2s 触发）
+        if let text = ProcessInfo.processInfo.environment["MARKFRAME_TEST_RECOVERY"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.writeSilently(content: text)
+                mfLog("test recovery written")
             }
         }
 
@@ -343,11 +423,17 @@ final class EditorWindowController: NSWindowController {
 
     private func markSaved() {
         window?.isDocumentEdited = false
+        // 已经落到真实文件上，恢复文件不再需要
+        discardRecovery()
     }
 
-    /// 自动保存：仅对已有路径的文档静默写盘，不弹面板也不报错
+    /// 自动保存：已保存的文档静默写回原文件；未命名文档写进恢复目录，
+    /// 这样断电/崩溃也能在下次启动时找回来。
     func writeSilently(content: String) {
-        guard !currentPath.isEmpty else { return }
+        if currentPath.isEmpty {
+            writeRecovery(content: content)
+            return
+        }
         do {
             try content.write(toFile: currentPath, atomically: true, encoding: .utf8)
             window?.isDocumentEdited = false
@@ -410,6 +496,8 @@ final class EditorWindowController: NSWindowController {
 
     private func applyContent(path: String, content: String, title: String) {
         currentPath = path
+        // 窗口里换了文档：上一个未命名文档的恢复文件作废
+        if !path.isEmpty { discardRecovery() }
         window?.title = title
         window?.isDocumentEdited = false
         runJS("window.__loadContent(\(jsStringLiteral(path)), \(jsStringLiteral(content)), \(jsStringLiteral(title)))")
@@ -848,6 +936,11 @@ final class DropContainerView: NSView {
 // 普通 NSWindow 关闭时不会像 NSDocument 那样自动询问，未保存内容会被静默丢弃。
 
 extension EditorWindowController: NSWindowDelegate {
+    /// 关窗意味着内容已经保存或用户主动放弃，恢复文件可以删了
+    func windowWillClose(_ notification: Notification) {
+        discardRecovery()
+    }
+
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender.isDocumentEdited else { return true }
 

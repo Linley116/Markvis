@@ -33,7 +33,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~6,000 lines: 1,200 Swift, 3,300 web core, 500 features, 970 tests.
+The whole editor is ~6,150 lines: 1,370 Swift, 3,300 web core, 500 features, 970 tests.
 
 ### Features
 
@@ -53,7 +53,7 @@ The whole editor is ~6,000 lines: 1,200 Swift, 3,300 web core, 500 features, 970
 | **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
 | **Footnotes / TOC** | `[^id]` references with click-through to `[^id]: ...` definitions, `[TOC]` rebuilt from the current headings |
 | **Spelling** | System spellcheck while typing (`Cmd+;` to toggle) |
-| **Files** | Double-click `.md`, drag to window, Open Recent, CLI argument, autosave, close confirmation |
+| **Files** | Double-click `.md`, drag to window, Open Recent, CLI argument, autosave, close confirmation, crash recovery for untitled documents |
 | **Export** | Paginated A4 PDF, self-contained HTML (local images inlined as data URLs), code highlighting, pasted images saved to `assets/` |
 
 ### Architecture

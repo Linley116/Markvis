@@ -34,7 +34,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 6,000 行：Swift 1,200 行、Web 内核 3,300 行、功能模块 500 行、测试 970 行。
+整个编辑器约 6,150 行：Swift 1,370 行、Web 内核 3,300 行、功能模块 500 行、测试 970 行。
 
 ### 功能
 
@@ -54,7 +54,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，`Cmd+Shift+L` |
 | **脚注 / 目录** | `[^id]` 引用 + `[^id]: ...` 定义（点击互相跳转），`[TOC]` 按当前标题自动重建 |
 | **拼写检查** | 输入时用系统词典检查（`Cmd+;` 切换） |
-| **文件** | 双击 `.md`、拖拽打开、最近打开、命令行参数、自动保存、关窗确认 |
+| **文件** | 双击 `.md`、拖拽打开、最近打开、命令行参数、自动保存、关窗确认、未命名文档崩溃恢复 |
 | **导出** | 分页 A4 PDF、自包含 HTML（本地图片内联为 data URL）、代码高亮、粘贴图片落到 `assets/` |
 
 ### 架构

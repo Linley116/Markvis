@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             wc.load(path: path)
             noteRecent(path)
         }
+
+        // 上次异常退出留下的未命名文档：提示恢复
+        recoverPendingDocuments()
     }
 
     /// 双击 .md 文件、或 `open -a MarkFrame x.md` 走这里
@@ -69,6 +72,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func windowWillClose(_ note: Notification) {
         guard let w = note.object as? NSWindow else { return }
         windowControllers.removeAll { $0.window === w }
+    }
+
+    // MARK: - 崩溃恢复
+
+    /// 启动时检查恢复目录；有东西就问一句，用户决定恢复还是丢弃。
+    /// 自动化测试（MARKFRAME_SELFTEST）下不走弹窗，直接恢复，避免阻塞启动。
+    private func recoverPendingDocuments() {
+        let files = EditorWindowController.pendingRecoveryFiles()
+        guard !files.isEmpty else { return }
+
+        var shouldRestore = true
+        if ProcessInfo.processInfo.environment["MARKFRAME_SELFTEST"] == nil {
+            let alert = NSAlert()
+            alert.messageText = L10n.t("Recover unsaved documents?", "恢复上次未保存的文档？")
+            alert.informativeText = L10n.t(
+                "\(files.count) document(s) were not saved when the app last quit.",
+                "有 \(files.count) 个文档在退出前没有保存。")
+            alert.addButton(withTitle: L10n.t("Recover", "恢复"))
+            alert.addButton(withTitle: L10n.t("Discard", "丢弃"))
+            shouldRestore = alert.runModal() == .alertFirstButtonReturn
+        }
+
+        if shouldRestore {
+            for url in files {
+                let wc = makeController()
+                wc.restore(from: url)
+            }
+        } else {
+            EditorWindowController.discardRecoveryFiles(files)
+        }
+    }
+
+    /// 正常退出时，把「没有未保存修改」的窗口的恢复文件清掉；
+    /// 有未保存内容的窗口保留，下次启动还能恢复。
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        for wc in windowControllers where !(wc.window?.isDocumentEdited ?? false) {
+            wc.discardRecovery()
+        }
+        return .terminateNow
     }
 
     // MARK: - 打开文件
