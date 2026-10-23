@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-93%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-103%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -33,7 +33,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~5,700 lines: 1,200 Swift, 3,100 web core, 500 features, 830 tests.
+The whole editor is ~6,000 lines: 1,200 Swift, 3,300 web core, 500 features, 970 tests.
 
 ### Features
 
@@ -51,6 +51,8 @@ The whole editor is ~5,700 lines: 1,200 Swift, 3,100 web core, 500 features, 830
 | **Outline** | `Cmd+Shift+O`, heading tree with current-section tracking |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
+| **Footnotes / TOC** | `[^id]` references with click-through to `[^id]: ...` definitions, `[TOC]` rebuilt from the current headings |
+| **Spelling** | System spellcheck while typing (`Cmd+;` to toggle) |
 | **Files** | Double-click `.md`, drag to window, Open Recent, CLI argument, autosave, close confirmation |
 | **Export** | Paginated A4 PDF, self-contained HTML (local images inlined as data URLs), code highlighting, pasted images saved to `assets/` |
 
@@ -130,6 +132,7 @@ To keep the build artifact for distribution:
 | Action | Shortcut |
 |---|---|
 | New / New tab / Open / Save | `Cmd+N` / `Cmd+T` / `Cmd+O` / `Cmd+S` |
+| Toggle spellcheck | `Cmd+;` |
 | Hard line break | `Shift+Enter` (or two trailing spaces / `\`, per GFM) |
 | Export PDF / HTML | File → Export |
 | Bold / Italic / Inline code | `Cmd+B` / `Cmd+I` / `Cmd+K` |
@@ -143,7 +146,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 53 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 63 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content

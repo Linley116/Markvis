@@ -178,6 +178,17 @@
         }
       }
 
+      // 脚注引用 [^label]（必须排在链接前面，否则会被当成 [text](url)）
+      if (c === '[' && src[i + 1] === '^') {
+        var mFn = /^\[\^([^\]\s]+)\]/.exec(src.slice(i));
+        if (mFn) {
+          flush();
+          out.push({ type: 'fnref', label: mFn[1] });
+          i += mFn[0].length;
+          continue;
+        }
+      }
+
       // 链接
       if (c === '[') {
         var mLink = /^\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/.exec(src.slice(i));
@@ -433,6 +444,26 @@
         continue;
       }
 
+      // [TOC] 目录占位（内容在渲染后由 refreshTOC 生成）
+      if (/^\s*\[TOC\]\s*$/i.test(line)) {
+        blocks.push({ type: 'toc' });
+        i++;
+        continue;
+      }
+
+      // 脚注定义 [^label]: 正文（续行按 4 空格 / Tab 缩进）
+      var mFnDef = /^\[\^([^\]\s]+)\]:[ \t]*(.*)$/.exec(line);
+      if (mFnDef) {
+        var fnBody = [mFnDef[2]];
+        i++;
+        while (i < lines.length && /^(?: {4}|\t)/.test(lines[i])) {
+          fnBody.push(lines[i].replace(/^(?: {4}|\t)/, ''));
+          i++;
+        }
+        blocks.push({ type: 'def_footnote', label: mFnDef[1], inline: parseInline(fnBody.join('\n')) });
+        continue;
+      }
+
       // 段落
       var para = [];
       while (i < lines.length) {
@@ -441,6 +472,8 @@
         if (/^(#{1,6})\s/.test(l)) break;
         if (/^\s*>/.test(l)) break;
         if (/^(\s*)([-*+]|\d+[.)])\s+/.test(l)) break;
+        if (/^\[\^[^\]\s]+\]:/.test(l)) break;
+        if (/^\s*\[TOC\]\s*$/i.test(l)) break;
         if (isFenceLine(l)) break;
         if (isHrLine(l)) break;
         para.push(l);
@@ -508,6 +541,13 @@
             '<a href="' + escapeAttr(n.href) + '">' + escapeHtml(n.href) + '</a>' +
             metaHTML('close', '>') + '</span>';
 
+        case 'fnref': {
+          var flabel = String(n.label);
+          return '<sup class="md-fn-ref" mdtype="footnote_ref" contenteditable="false" title="跳到脚注"' +
+            ' data-label="' + escapeAttr(flabel) + '" data-src="' + escapeAttr('[^' + flabel + ']') +
+            '">' + escapeHtml(flabel) + '</sup>';
+        }
+
         case 'image':
           return '<img class="md-img" src="' + escapeAttr(resolveImgSrc(n.src)) + '" alt="' + escapeAttr(n.alt) +
             '" data-src="' + escapeAttr('![' + n.alt + '](' + n.src + ')') + '">';
@@ -555,6 +595,19 @@
 
       case 'hr':
         return '<hr class="md-block" mdtype="hr"' + cid + '>';
+
+      case 'toc':
+        // 目录内容由 refreshTOC() 生成；整块不可编辑，当作原子处理
+        return '<div class="md-block md-toc" mdtype="toc" contenteditable="false" data-src="[TOC]"' + cid + '></div>';
+
+      case 'def_footnote':
+        return '<div class="md-block md-fn-def" mdtype="def_footnote" data-label="' +
+          escapeAttr(b.label) + '"' + cid + '>' +
+          '<span class="md-fn-mark" contenteditable="false" data-label="' + escapeAttr(b.label) + '">[' +
+          escapeHtml(b.label) + ']</span>' +
+          '<span class="md-fn-body">' + renderInline(b.inline) + '</span>' +
+          '<a class="md-fn-back" contenteditable="false" href="#" data-label="' + escapeAttr(b.label) +
+          '" title="回到引用">↩</a></div>';
 
       case 'meta':
         return '<pre class="md-block md-meta" mdtype="meta"' + cid + '>' +
@@ -651,9 +704,41 @@
     return el.tagName === 'BR' && el.classList && el.classList.contains('md-pad');
   }
 
+  /** 标题纯文本：剔除 .md-meta，否则目录里会出现 `**` */
+  function plainTextOf(el) {
+    var clone = el.cloneNode(true);
+    var metas = clone.querySelectorAll('.md-meta');
+    for (var i = 0; i < metas.length; i++) {
+      if (metas[i].parentNode) metas[i].parentNode.removeChild(metas[i]);
+    }
+    return clone.textContent;
+  }
+
+  /** 按当前标题重建所有 [TOC] 块（内容不可编辑，纯展示 + 点击跳转） */
+  function refreshTOC() {
+    var tocs = write.querySelectorAll('[mdtype="toc"]');
+    if (!tocs.length) return;
+
+    var heads = write.querySelectorAll('h1,h2,h3,h4,h5,h6');
+    var html = '<ol class="md-toc-list">';
+    for (var i = 0; i < heads.length; i++) {
+      var h = heads[i];
+      var lvl = parseInt(h.tagName.charAt(1), 10);
+      var text = plainTextOf(h).trim() || '(空标题)';
+      html += '<li class="md-toc-item" data-head="' + i + '" style="padding-left:' +
+        ((lvl - 1) * 16) + 'px"><a href="#">' + escapeHtml(text) + '</a></li>';
+    }
+    html += '</ol>';
+
+    for (var k = 0; k < tocs.length; k++) {
+      if (tocs[k].innerHTML !== html) tocs[k].innerHTML = html;
+    }
+  }
+
   function renderDoc() {
     write.innerHTML = doc.map(renderBlock).join('');
     padEmpties();
+    refreshTOC();
   }
 
   function loadMarkdown(text) {
@@ -702,6 +787,14 @@
         out += n.getAttribute('data-src') || '';
         continue;
       }
+
+      // 其它带 data-src 的原子（脚注引用等）
+      if (n.hasAttribute('data-src')) {
+        out += n.getAttribute('data-src');
+        continue;
+      }
+      // 不可编辑的装饰节点（脚注的序号/回跳箭头）不进源码
+      if (n.getAttribute && n.getAttribute('contenteditable') === 'false') continue;
 
       // .md-meta 里的标记是真实文本节点，递归即可读回；
       // 其余行内元素（code / a / del）同样递归。
@@ -815,6 +908,19 @@
       case 'table':
         return tableRaw(el);
 
+      case 'toc':
+        return el.getAttribute('data-src') || '[TOC]';
+
+      case 'def_footnote': {
+        var fnBodyEl = el.querySelector('.md-fn-body');
+        var fnText = fnBodyEl ? inlineRaw(fnBodyEl) : '';
+        // 续行按 4 空格缩进写回，才能被重新解析成同一条脚注
+        fnText = fnText.split('\n').map(function (line, i) {
+          return i === 0 ? line : '    ' + line;
+        }).join('\n');
+        return '[^' + (el.getAttribute('data-label') || '') + ']: ' + fnText;
+      }
+
       case 'list': {
         var ordered = el.tagName === 'OL';
         var start = parseInt(el.getAttribute('start') || '1', 10) || 1;
@@ -899,6 +1005,14 @@
         return;
       }
       if (node.tagName === 'IMG') { pos += (node.getAttribute('data-src') || '').length; return; }
+
+      // 其它原子（脚注引用）：按 data-src 的源码长度计
+      if (node.hasAttribute && node.hasAttribute('data-src')) {
+        pos += (node.getAttribute('data-src') || '').length;
+        return;
+      }
+      // 不可编辑的装饰节点不占源码位置
+      if (node.getAttribute && node.getAttribute('contenteditable') === 'false') return;
 
       // 标记是真实文本节点，偏移天然对齐：普通递归即可，
       // 不再需要按 data-open / data-close 补长度。
@@ -1000,6 +1114,25 @@
         pos += ilen;
         return;
       }
+
+      // 其它原子（脚注引用）：规则同图片，贴到前后
+      if (node.hasAttribute && node.hasAttribute('data-src')) {
+        var alen = (node.getAttribute('data-src') || '').length;
+        if (target <= pos + alen) {
+          var ar = document.createRange();
+          if (target <= pos) ar.setStartBefore(node); else ar.setStartAfter(node);
+          ar.collapse(true);
+          var asel = window.getSelection();
+          asel.removeAllRanges();
+          asel.addRange(ar);
+          placed = true;
+          return;
+        }
+        pos += alen;
+        return;
+      }
+      // 装饰节点（脚注序号/回跳箭头）不可编辑，跳过
+      if (node.getAttribute && node.getAttribute('contenteditable') === 'false') return;
 
       for (var i = 0; i < node.childNodes.length; i++) {
         walk(node.childNodes[i]);
@@ -1199,6 +1332,7 @@
     });
     updateExpand();
     updateWordCount();
+    refreshTOC();
   }, 200);
 
   // =====================================================================
@@ -1235,6 +1369,41 @@
   // =====================================================================
   // 10. 编辑行为
   // =====================================================================
+
+  // 脚注跳转 / 目录跳转：这些节点是 contenteditable=false，点击不会移动光标，
+  // 统一在这里做滚动导航。
+  function jumpToLabel(mdtype, label) {
+    var all = write.querySelectorAll('[mdtype="' + mdtype + '"]');
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].getAttribute('data-label') === label) {
+        all[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+    }
+  }
+
+  write.addEventListener('click', function (e) {
+    var t = e.target;
+    while (t && t.nodeType !== 1 && t !== write) t = t.parentNode;
+    if (!t || t === write) return;
+
+    if (t.classList && t.classList.contains('md-fn-ref')) {
+      e.preventDefault();
+      jumpToLabel('def_footnote', t.getAttribute('data-label'));
+      return;
+    }
+    if (t.classList && (t.classList.contains('md-fn-mark') || t.classList.contains('md-fn-back'))) {
+      e.preventDefault();
+      jumpToLabel('footnote_ref', t.getAttribute('data-label'));
+      return;
+    }
+    if (t.tagName === 'A' && t.parentNode && t.parentNode.classList.contains('md-toc-item')) {
+      e.preventDefault();
+      var idx = parseInt(t.parentNode.getAttribute('data-head'), 10);
+      var heads = write.querySelectorAll('h1,h2,h3,h4,h5,h6');
+      if (heads[idx]) heads[idx].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
 
   write.addEventListener('input', function () {
     markDirtyFromCaret();
@@ -1731,12 +1900,27 @@
     setEdited(false);
   };
 
+  /** 拼写检查开关：WebKit 用系统词典，中文不会被标红，英文错词会有波浪线 */
+  function toggleSpell() {
+    var on = write.getAttribute('spellcheck') !== 'true';
+    write.setAttribute('spellcheck', on ? 'true' : 'false');
+    try { localStorage.setItem('mf-spell', on ? '1' : '0'); } catch (e) {}
+    return on;
+  }
+
+  function initSpell() {
+    var pref = null;
+    try { pref = localStorage.getItem('mf-spell'); } catch (e) {}
+    if (pref === '0') write.setAttribute('spellcheck', 'false');
+  }
+
   window.__cmd = function (name) {
     switch (name) {
       case 'bold': wrapSelection('**', '**'); break;
       case 'italic': wrapSelection('*', '*'); break;
       case 'code': wrapSelection('`', '`'); break;
       case 'toggleSource': toggleSource(); break;
+      case 'toggleSpell': toggleSpell(); break;
       case 'zoomIn': setZoom(zoom + 0.1); break;
       case 'zoomOut': setZoom(zoom - 0.1); break;
       case 'zoomReset': setZoom(1); break;
@@ -2253,6 +2437,7 @@
       '.mf-page > :first-child { margin-top: 0 !important; }',
       '.md-meta { display: none !important; }',
       '.md-inline.md-expand { background: none !important; }',
+      '.md-fn-back { display: none !important; }',
       '.mf-anchor { display: none !important; }',
       // 打印时不允许横向滚动：代码块必须折行，否则右侧被裁掉
       'pre.md-fences, pre.md-fences code { white-space: pre-wrap !important;',
@@ -2299,6 +2484,7 @@
       '#scroll { height: auto !important; overflow: visible !important; }\n' +
       '.mf-anchor { display: none !important; }\n' +
       '.md-meta { display: none !important; }\n' +
+      '.md-fn-back { display: none !important; }\n' +
       '</style>\n' +
       '</head>\n' +
       '<body class="mf-export-standalone">\n' +
@@ -2349,6 +2535,7 @@
   ].join('\n');
 
   loadMarkdown(DEMO);
+  initSpell();
   write.focus();
 
   // 把未捕获异常回传原生，避免 Web 层错误静默
@@ -2360,5 +2547,5 @@
   });
 
   // 通知原生：前端就绪
-  bridge.callHandler('app.ready', { version: '0.3.1' });
+  bridge.callHandler('app.ready', { version: '0.6' });
 })();

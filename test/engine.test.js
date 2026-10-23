@@ -379,7 +379,74 @@ function check(name, cond, extra) {
   });
   check('块尾输入不会被吸进行内元素', tail === 'a **b**X', JSON.stringify(tail));
 
+  console.log('\n[7.9] 脚注与目录（F7）');
+  const fn = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = [
+      '# 标题一',
+      '',
+      '正文引用[^1]，还有命名[^note]。',
+      '',
+      '[^1]: 第一条脚注',
+      '[^note]: 命名脚注，可以',
+      '    换行续写',
+      '',
+      '## 标题二',
+      '',
+      '[TOC]'
+    ].join('\n');
+    window.__loadContent('', src, 't');
+    await wait(120);
+
+    const refs = [...document.querySelectorAll('.md-fn-ref')].map(x => x.getAttribute('data-src'));
+    const defs = [...document.querySelectorAll('[mdtype="def_footnote"]')].map(x => ({
+      label: x.getAttribute('data-label'),
+      body: x.querySelector('.md-fn-body').textContent
+    }));
+    const toc = document.querySelector('[mdtype="toc"]');
+    return {
+      refs,
+      defs,
+      tocItems: toc ? [...toc.querySelectorAll('.md-toc-item a')].map(a => a.textContent) : null,
+      md: window.__getMarkdown()
+    };
+  });
+  check('脚注引用是原子（data-src = [^1]）', JSON.stringify(fn.refs) === '["[^1]","[^note]"]', JSON.stringify(fn.refs));
+  check('脚注定义解析出两个', fn.defs.length === 2 && fn.defs[0].label === '1' && fn.defs[1].label === 'note', JSON.stringify(fn.defs));
+  check('脚注定义支持缩进续行', /命名脚注，可以\n换行续写/.test(fn.defs[1] && fn.defs[1].body), JSON.stringify(fn.defs[1]));
+  check('TOC 列出两个标题', JSON.stringify(fn.tocItems) === '["标题一","标题二"]', JSON.stringify(fn.tocItems));
+  check('往返保留引用语法', /正文引用\[\^1\]，还有命名\[\^note\]。/.test(fn.md), fn.md.split('\n')[2]);
+  check('往返保留定义与续行', /\[\^note\]: 命名脚注，可以\n {4}换行续写/.test(fn.md), JSON.stringify(fn.md));
+  check('往返保留 [TOC]', /^\[TOC\]$/m.test(fn.md));
+
+  const fnCaret = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '引用[^1] 后续', 't');
+    await wait(100);
+    const write = document.getElementById('write');
+    write.focus();
+    const p = write.querySelector('p[mdtype="paragraph"]');
+    window.MF.setCaretBySourceOffset(p, 6);   // 紧贴引用原子之后（「引用」2 + [^1] 4）
+    await wait(60);
+    document.execCommand('insertText', false, 'X');
+    await wait(450);
+    return window.__getMarkdown();
+  });
+  check('脚注原子后的光标偏移正确', fnCaret === '引用[^1]X 后续', JSON.stringify(fnCaret));
+
+  const spell = await page.evaluate(() => {
+    const write = document.getElementById('write');
+    const before = write.getAttribute('spellcheck');
+    window.__cmd('toggleSpell');
+    const off = write.getAttribute('spellcheck');
+    window.__cmd('toggleSpell');
+    return { before, off, back: write.getAttribute('spellcheck') };
+  });
+  check('拼写检查默认开启', spell.before === 'true', spell.before);
+  check('拼写检查可关闭/恢复', spell.off === 'false' && spell.back === 'true', JSON.stringify(spell));
+
   console.log('\n[8] 运行时错误');
+
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 
   await browser.close();

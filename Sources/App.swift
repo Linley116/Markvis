@@ -105,7 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let files = UserDefaults.standard.stringArray(forKey: recentKey) ?? []
         if files.isEmpty {
-            let empty = NSMenuItem(title: "No Recent Files", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: L10n.t("No Recent Files", "无最近文件"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
             return
@@ -122,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-        let clear = NSMenuItem(title: "Clear Menu", action: #selector(clearRecent(_:)), keyEquivalent: "")
+        let clear = NSMenuItem(title: L10n.t("Clear Menu", "清除菜单"), action: #selector(clearRecent(_:)), keyEquivalent: "")
         clear.target = self
         menu.addItem(clear)
     }
@@ -147,110 +147,113 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About MarkFrame",
+        appMenu.addItem(withTitle: L10n.t("About MarkFrame", "关于 MarkFrame"),
                         action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                         keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide MarkFrame",
+        appMenu.addItem(withTitle: L10n.t("Hide MarkFrame", "隐藏 MarkFrame"),
                         action: #selector(NSApplication.hide(_:)),
                         keyEquivalent: "h")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit MarkFrame",
+        appMenu.addItem(withTitle: L10n.t("Quit MarkFrame", "退出 MarkFrame"),
                         action: #selector(NSApplication.terminate(_:)),
                         keyEquivalent: "q")
 
         // 文件
         let fileItem = NSMenuItem()
         main.addItem(fileItem)
-        let fileMenu = NSMenu(title: "File")
+        let fileMenu = NSMenu(title: L10n.t("File", "文件"))
         fileItem.submenu = fileMenu
-        fileMenu.addItem(withTitle: "New Window", action: #selector(newDocument(_:)), keyEquivalent: "n")
-        fileMenu.addItem(withTitle: "New Tab", action: #selector(newTab(_:)), keyEquivalent: "t")
+        fileMenu.addItem(withTitle: L10n.t("New Window", "新建窗口"), action: #selector(newDocument(_:)), keyEquivalent: "n")
+        fileMenu.addItem(withTitle: L10n.t("New Tab", "新建标签页"), action: #selector(newTab(_:)), keyEquivalent: "t")
 
-        let openItem = fileMenu.addItem(withTitle: "Open…", action: #selector(openDocument(_:)), keyEquivalent: "o")
+        let openItem = fileMenu.addItem(withTitle: L10n.t("Open…", "打开…"), action: #selector(openDocument(_:)), keyEquivalent: "o")
         openItem.keyEquivalentModifierMask = [.command]
 
-        let recentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
-        let recent = NSMenu(title: "Open Recent")
+        let recentItem = NSMenuItem(title: L10n.t("Open Recent", "最近打开"), action: nil, keyEquivalent: "")
+        let recent = NSMenu(title: L10n.t("Open Recent", "最近打开"))
         recentItem.submenu = recent
         recentMenu = recent
         fileMenu.addItem(recentItem)
 
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "Save", action: #selector(saveDocument(_:)), keyEquivalent: "s")
-        let saveAs = fileMenu.addItem(withTitle: "Save As…", action: #selector(saveDocumentAs(_:)), keyEquivalent: "S")
+        fileMenu.addItem(withTitle: L10n.t("Save", "保存"), action: #selector(saveDocument(_:)), keyEquivalent: "s")
+        let saveAs = fileMenu.addItem(withTitle: L10n.t("Save As…", "另存为…"), action: #selector(saveDocumentAs(_:)), keyEquivalent: "S")
         saveAs.keyEquivalentModifierMask = [.command, .shift]
 
-        let exportItem = NSMenuItem(title: "Export", action: nil, keyEquivalent: "")
-        let exportMenu = NSMenu(title: "Export")
+        let exportItem = NSMenuItem(title: L10n.t("Export", "导出"), action: nil, keyEquivalent: "")
+        let exportMenu = NSMenu(title: L10n.t("Export", "导出"))
         exportItem.submenu = exportMenu
-        exportMenu.addItem(withTitle: "PDF…", action: #selector(exportPDF(_:)), keyEquivalent: "")
-        exportMenu.addItem(withTitle: "HTML…", action: #selector(exportHTML(_:)), keyEquivalent: "")
+        exportMenu.addItem(withTitle: L10n.t("PDF…", "PDF…"), action: #selector(exportPDF(_:)), keyEquivalent: "")
+        exportMenu.addItem(withTitle: L10n.t("HTML…", "HTML…"), action: #selector(exportHTML(_:)), keyEquivalent: "")
         fileMenu.addItem(exportItem)
 
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileMenu.addItem(withTitle: L10n.t("Close", "关闭"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
 
         // 编辑（走 responder chain，作用于 contenteditable）
         let editItem = NSMenuItem()
         main.addItem(editItem)
-        let editMenu = NSMenu(title: "Edit")
+        let editMenu = NSMenu(title: L10n.t("Edit", "编辑"))
         editItem.submenu = editMenu
-        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        let redo = editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(withTitle: L10n.t("Undo", "撤销"), action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = editMenu.addItem(withTitle: L10n.t("Redo", "重做"), action: Selector(("redo:")), keyEquivalent: "Z")
         redo.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(withTitle: L10n.t("Cut", "剪切"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: L10n.t("Copy", "复制"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: L10n.t("Paste", "粘贴"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: L10n.t("Select All", "全选"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Bold", action: #selector(toggleBold(_:)), keyEquivalent: "b")
-        editMenu.addItem(withTitle: "Italic", action: #selector(toggleItalic(_:)), keyEquivalent: "i")
-        editMenu.addItem(withTitle: "Inline Code", action: #selector(toggleCode(_:)), keyEquivalent: "k")
+        editMenu.addItem(withTitle: L10n.t("Bold", "粗体"), action: #selector(toggleBold(_:)), keyEquivalent: "b")
+        editMenu.addItem(withTitle: L10n.t("Italic", "斜体"), action: #selector(toggleItalic(_:)), keyEquivalent: "i")
+        editMenu.addItem(withTitle: L10n.t("Inline Code", "行内代码"), action: #selector(toggleCode(_:)), keyEquivalent: "k")
 
         // 视图
         let viewItem = NSMenuItem()
         main.addItem(viewItem)
-        let viewMenu = NSMenu(title: "View")
+        let viewMenu = NSMenu(title: L10n.t("View", "显示"))
         viewItem.submenu = viewMenu
-        viewMenu.addItem(withTitle: "Toggle Source Mode",
+        viewMenu.addItem(withTitle: L10n.t("Toggle Source Mode", "切换源码模式"),
                          action: #selector(toggleSourceMode(_:)),
                          keyEquivalent: "/")
         viewMenu.addItem(.separator())
 
-        let find = viewMenu.addItem(withTitle: "Find and Replace…",
+        let find = viewMenu.addItem(withTitle: L10n.t("Find and Replace…", "查找与替换…"),
                                     action: #selector(showFind(_:)), keyEquivalent: "f")
         find.keyEquivalentModifierMask = [.command]
-        let outline = viewMenu.addItem(withTitle: "Toggle Outline",
+        let spell = viewMenu.addItem(withTitle: L10n.t("Check Spelling While Typing", "输入时检查拼写"),
+                                     action: #selector(toggleSpell(_:)), keyEquivalent: ";")
+        spell.keyEquivalentModifierMask = [.command]
+        let outline = viewMenu.addItem(withTitle: L10n.t("Toggle Outline", "显示/隐藏大纲"),
                                        action: #selector(toggleOutline(_:)), keyEquivalent: "O")
         outline.keyEquivalentModifierMask = [.command, .shift]
-        let focus = viewMenu.addItem(withTitle: "Focus Mode",
+        let focus = viewMenu.addItem(withTitle: L10n.t("Focus Mode", "专注模式"),
                                      action: #selector(toggleFocusMode(_:)), keyEquivalent: "F")
         focus.keyEquivalentModifierMask = [.command, .shift]
-        let typewriter = viewMenu.addItem(withTitle: "Typewriter Mode",
+        let typewriter = viewMenu.addItem(withTitle: L10n.t("Typewriter Mode", "打字机模式"),
                                           action: #selector(toggleTypewriter(_:)), keyEquivalent: "T")
         typewriter.keyEquivalentModifierMask = [.command, .shift]
-        let theme = viewMenu.addItem(withTitle: "Next Theme",
+        let theme = viewMenu.addItem(withTitle: L10n.t("Next Theme", "下一个主题"),
                                      action: #selector(nextTheme(_:)), keyEquivalent: "L")
         theme.keyEquivalentModifierMask = [.command, .shift]
 
         viewMenu.addItem(.separator())
-        viewMenu.addItem(withTitle: "Zoom In", action: #selector(zoomIn(_:)), keyEquivalent: "+")
-        viewMenu.addItem(withTitle: "Zoom Out", action: #selector(zoomOut(_:)), keyEquivalent: "-")
-        viewMenu.addItem(withTitle: "Actual Size", action: #selector(zoomReset(_:)), keyEquivalent: "0")
+        viewMenu.addItem(withTitle: L10n.t("Zoom In", "放大"), action: #selector(zoomIn(_:)), keyEquivalent: "+")
+        viewMenu.addItem(withTitle: L10n.t("Zoom Out", "缩小"), action: #selector(zoomOut(_:)), keyEquivalent: "-")
+        viewMenu.addItem(withTitle: L10n.t("Actual Size", "实际大小"), action: #selector(zoomReset(_:)), keyEquivalent: "0")
 
         // 窗口（NSApp.windowsMenu 会让系统自动维护打开的文档列表）
         let winItem = NSMenuItem()
         main.addItem(winItem)
-        let winMenu = NSMenu(title: "Window")
+        let winMenu = NSMenu(title: L10n.t("Window", "窗口"))
         winItem.submenu = winMenu
-        winMenu.addItem(withTitle: "Minimize",
+        winMenu.addItem(withTitle: L10n.t("Minimize", "最小化"),
                         action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        winMenu.addItem(withTitle: "Zoom",
+        winMenu.addItem(withTitle: L10n.t("Zoom", "缩放"),
                         action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
         winMenu.addItem(.separator())
-        winMenu.addItem(withTitle: "Bring All to Front",
+        winMenu.addItem(withTitle: L10n.t("Bring All to Front", "全部置于顶层"),
                         action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         winMenu.addItem(.separator())
         NSApp.windowsMenu = winMenu
@@ -258,7 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 帮助（有个空位比缺菜单好）
         let helpItem = NSMenuItem()
         main.addItem(helpItem)
-        helpItem.submenu = NSMenu(title: "Help")
+        helpItem.submenu = NSMenu(title: L10n.t("Help", "帮助"))
 
         NSApp.mainMenu = main
         rebuildRecentMenu()
@@ -317,6 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleItalic(_ sender: Any?) { js?("window.__cmd('italic')") }
     @objc private func toggleCode(_ sender: Any?) { js?("window.__cmd('code')") }
     @objc private func toggleSourceMode(_ sender: Any?) { js?("window.__cmd('toggleSource')") }
+    @objc private func toggleSpell(_ sender: Any?) { js?("window.__cmd('toggleSpell')") }
     @objc private func showFind(_ sender: Any?) { js?("window.MFSearch && window.MFSearch.show()") }
     @objc private func toggleOutline(_ sender: Any?) { js?("window.MFOutline && window.MFOutline.toggle()") }
     @objc private func toggleFocusMode(_ sender: Any?) { js?("window.MFFocus && window.MFFocus.toggleFocus()") }

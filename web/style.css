@@ -336,6 +336,68 @@ a:hover { text-decoration: underline; }
 
 .md-inline.md-expand { background: rgba(65,131,196,.06); border-radius: 2px; }
 
+/* ---------- 脚注 / 目录 ---------- */
+
+.md-fn-ref {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: .82em;
+  vertical-align: super;
+  padding: 0 1px;
+}
+
+.md-fn-def {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: .94em;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  color: var(--fg);
+}
+
+.md-fn-mark {
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.md-fn-body { flex: 1; min-width: 0; }
+
+.md-fn-back {
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.md-fn-back:hover, .md-fn-mark:hover { color: var(--accent); }
+
+.md-toc {
+  border-left: 2px solid var(--border);
+  padding-left: 16px;
+  user-select: none;
+}
+
+.md-toc-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.md-toc-item { margin: 2px 0; }
+
+.md-toc-item a {
+  color: var(--fg);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+
+.md-toc-item a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* ---------- 状态栏 ---------- */
 
 #status {

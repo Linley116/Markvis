@@ -182,7 +182,7 @@ final class EditorWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Untitled"
+        window.title = L10n.t("Untitled", "未命名")
         window.minSize = NSSize(width: 560, height: 420)
         window.center()
         window.setFrameAutosaveName("MarkFrameMainWindow")
@@ -268,7 +268,7 @@ final class EditorWindowController: NSWindowController {
 
     func newDocument() {
         currentPath = ""
-        runJS("window.__loadContent('', '', 'Untitled')")
+        runJS("window.__loadContent('', '', \(jsStringLiteral(L10n.t("Untitled", "未命名"))))")
     }
 
     func save(saveAs: Bool, then completion: (() -> Void)? = nil) {
@@ -358,7 +358,7 @@ final class EditorWindowController: NSWindowController {
 
     private func suggestedName() -> String {
         if !currentPath.isEmpty { return (currentPath as NSString).lastPathComponent }
-        return "Untitled.md"
+        return L10n.t("Untitled", "未命名") + ".md"
     }
 
     func openDocumentPanel() {
@@ -570,7 +570,7 @@ final class EditorWindowController: NSWindowController {
     }
 
     private func defaultExportName(ext: String) -> String {
-        if currentPath.isEmpty { return "Untitled.\(ext)" }
+        if currentPath.isEmpty { return L10n.t("Untitled", "未命名") + ".\(ext)" }
         let base = ((currentPath as NSString).lastPathComponent as NSString).deletingPathExtension
         return "\(base).\(ext)"
     }
@@ -606,7 +606,7 @@ final class EditorWindowController: NSWindowController {
                   let pw = obj["pageW"] as? Double,
                   let ph = obj["pageH"] as? Double else {
                 self.runJS("window.__finishExport && window.__finishExport()")
-                self.showSimpleAlert("分页失败：文档为空")
+                self.showSimpleAlert(L10n.t("Pagination failed: empty document", "分页失败：文档为空"))
                 return
             }
 
@@ -617,7 +617,7 @@ final class EditorWindowController: NSWindowController {
             self.runJSReturning("window.__printShellHTML ? window.__printShellHTML() : ''") { shell in
                 guard let html = shell as? String, !html.isEmpty else {
                     self.runJS("window.__finishExport && window.__finishExport()")
-                    self.showSimpleAlert("导出失败：无法生成打印样式")
+                    self.showSimpleAlert(L10n.t("Export failed: could not build print stylesheet", "导出失败：无法生成打印样式"))
                     return
                 }
                 self.startRenderPipeline(shellHTML: html)
@@ -723,7 +723,7 @@ final class EditorWindowController: NSWindowController {
         runJS("window.__finishExport && window.__finishExport()")
 
         guard !exportRendered.isEmpty else {
-            showSimpleAlert("导出失败：没有捕获到页面")
+            showSimpleAlert(L10n.t("Export failed: no pages captured", "导出失败：没有捕获到页面"))
             return
         }
 
@@ -762,7 +762,7 @@ final class EditorWindowController: NSWindowController {
     private func showSimpleAlert(_ message: String) {
         let alert = NSAlert()
         alert.messageText = message
-        alert.addButton(withTitle: "好")
+        alert.addButton(withTitle: L10n.t("OK", "好"))
         alert.beginSheetModal(for: window!)
     }
 
@@ -771,10 +771,10 @@ final class EditorWindowController: NSWindowController {
     func confirmDiscardIfNeeded(_ proceed: @escaping () -> Void) {
         guard window?.isDocumentEdited == true else { proceed(); return }
         let alert = NSAlert()
-        alert.messageText = "当前文档有未保存的修改"
-        alert.informativeText = "继续将丢弃这些修改。"
-        alert.addButton(withTitle: "丢弃并继续")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = L10n.t("This document has unsaved changes", "当前文档有未保存的修改")
+        alert.informativeText = L10n.t("Continuing will discard them.", "继续将丢弃这些修改。")
+        alert.addButton(withTitle: L10n.t("Discard and Continue", "丢弃并继续"))
+        alert.addButton(withTitle: L10n.t("Cancel", "取消"))
         alert.beginSheetModal(for: window!) { response in
             if response == .alertFirstButtonReturn { proceed() }
         }
@@ -852,11 +852,11 @@ extension EditorWindowController: NSWindowDelegate {
         guard sender.isDocumentEdited else { return true }
 
         let alert = NSAlert()
-        alert.messageText = "当前文档有未保存的修改"
-        alert.informativeText = "关闭后这些修改会丢失。要保存吗？"
-        alert.addButton(withTitle: "保存并关闭")
-        alert.addButton(withTitle: "取消")
-        alert.addButton(withTitle: "放弃修改")
+        alert.messageText = L10n.t("This document has unsaved changes", "当前文档有未保存的修改")
+        alert.informativeText = L10n.t("These changes will be lost if you close it. Save first?", "关闭后这些修改会丢失。要保存吗？")
+        alert.addButton(withTitle: L10n.t("Save and Close", "保存并关闭"))
+        alert.addButton(withTitle: L10n.t("Cancel", "取消"))
+        alert.addButton(withTitle: L10n.t("Discard Changes", "放弃修改"))
 
         switch alert.runModal() {
         case .alertFirstButtonReturn:

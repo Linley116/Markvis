@@ -17,6 +17,7 @@ echo "==> compiling Swift"
 swiftc -O \
   "$ROOT/Sources/main.swift" \
   "$ROOT/Sources/App.swift" \
+  "$ROOT/Sources/L10n.swift" \
   "$ROOT/Sources/EditorWindow.swift" \
   -o "$APP/Contents/MacOS/MarkFrame" \
   -framework Cocoa -framework WebKit
