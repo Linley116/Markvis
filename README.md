@@ -166,7 +166,7 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — completed work is struck through, so what is left is what is not crossed out. Short version: footnotes/TOC, math + Mermaid, unified undo stack, nested blocks.
+See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. Short version: custom themes, unified undo stack, nested blocks, file tree.
 
 ### License
 

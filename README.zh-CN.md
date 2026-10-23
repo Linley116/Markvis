@@ -167,7 +167,7 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 路线图
 
-见 [ROADMAP.md](ROADMAP.md) —— 已完成项用删除线划掉，没划掉的就是待办。简版：脚注/TOC、数学与 Mermaid、统一撤销栈、嵌套块。
+见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着待修 bug 列表、待做功能列表和踩坑记录。简版：自定义主题、统一撤销栈、嵌套块、文件树。
 
 ### 许可证
 
