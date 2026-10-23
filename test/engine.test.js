@@ -578,6 +578,53 @@ function check(name, cond, extra) {
   check('应用后 Markdown 更新', mathEdit.md === '值 $x^3$ 结束', JSON.stringify(mathEdit.md));
   check('应用后重新渲染', mathEdit.rendered === true && mathEdit.tex === 'x^3', JSON.stringify(mathEdit));
 
+  console.log('\n[7.13] 前置元数据 front matter（回归：块不能被行内标记的规则藏掉）');
+  const meta = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = ['---', 'name: fds-review', 'description: Self-contained skill', '---',
+                 '', '# 标题', '', '正文 **粗体**'].join('\n');
+    const read = () => {
+      const el = document.querySelector('[mdtype="meta"]');
+      const inline = document.querySelector('.md-inline .md-meta');
+      return {
+        found: !!el,
+        display: el ? getComputedStyle(el).display : null,
+        height: el ? Math.round(el.getBoundingClientRect().height) : 0,
+        text: el ? (el.textContent || '').slice(0, 16) : '',
+        inlineDisplay: inline ? getComputedStyle(inline).display : null,
+        markdown: window.__getMarkdown()
+      };
+    };
+
+    window.__loadContent('', src, 't');
+    await wait(160);
+    const plain = read();
+
+    // BOM（有些编辑器会写 U+FEFF）
+    window.__loadContent('', '\uFEFF' + src, 't');
+    await wait(160);
+    const bom = read();
+
+    // 中间出现的 --- 仍然是分隔线，不是元数据
+    window.__loadContent('', ['段落', '', '---', '', '结尾'].join('\n'), 't');
+    await wait(160);
+    const mid = { metaCount: document.querySelectorAll('[mdtype="meta"]').length };
+
+    return { plain, bom, mid };
+  });
+  check('front matter 渲染成 meta 块', meta.plain.found === true, JSON.stringify(meta.plain));
+  check('meta 块可见（不被行内标记的 display:none 波及）',
+        meta.plain.display === 'block' && meta.plain.height > 20, JSON.stringify(meta.plain));
+  check('meta 块内容正确', meta.plain.text.indexOf('name: fds-review') === 0, meta.plain.text);
+  check('行内标记仍然隐藏', meta.plain.inlineDisplay === 'none', String(meta.plain.inlineDisplay));
+  check('front matter 往返无损',
+        meta.plain.markdown === ['---', 'name: fds-review', 'description: Self-contained skill', '---',
+                                 '', '# 标题', '', '正文 **粗体**'].join('\n'),
+        JSON.stringify(meta.plain.markdown.slice(0, 30)));
+  check('带 BOM 的文件也能识别 front matter',
+        meta.bom.found === true && meta.bom.text.indexOf('name: fds-review') === 0, JSON.stringify(meta.bom));
+  check('正文中间的 --- 仍是分隔线', meta.mid.metaCount === 0, JSON.stringify(meta.mid));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

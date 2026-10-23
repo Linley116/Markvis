@@ -431,16 +431,20 @@ const TABLE_MD = [
     window.__loadContent('', md, 't.md');
     await new Promise(r => setTimeout(r, 120));
     const ol = document.querySelector('ol');
-    const meta = document.querySelector('pre.md-meta');
+    const meta = document.querySelector('pre.md-meta-block');
     return {
       meta: !!meta,
       metaText: meta ? meta.textContent : '',
+      metaVisible: meta ? getComputedStyle(meta).display !== 'none' &&
+                          meta.getBoundingClientRect().height > 0 : false,
       olStart: ol ? ol.getAttribute('start') : null,
       cols: document.querySelectorAll('table th').length,
       md: window.__getMarkdown()
     };
   });
   check('front matter 渲染为元数据块', rich.meta && /name: x/.test(rich.metaText), rich.metaText.slice(0, 30));
+  // 这条是 v0.9.1 的回归前提：块必须真的可见（曾经被 .md-meta 的 display:none 波及）
+  check('front matter 块可见', rich.metaVisible === true, JSON.stringify(rich.metaVisible));
   check('有序列表保留起始编号', rich.olStart === '3', rich.olStart);
   check('表格 4 列', rich.cols === 4, rich.cols);
   check('序列化保留 front matter', rich.md.indexOf('---\nname: x') === 0, rich.md.slice(0, 20));

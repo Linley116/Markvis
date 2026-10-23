@@ -307,7 +307,7 @@ table.md-table {
 
 /* ---------- YAML front matter ---------- */
 
-pre.md-meta {
+pre.md-meta-block {
   font-family: "SF Mono", Menlo, monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -946,7 +946,7 @@ body.mf-export {
 }
 
 /* YAML front matter 是元数据，导出时和 Typora 一样不渲染 */
-body.mf-export pre.md-meta { display: none !important; }
+body.mf-export pre.md-meta-block { display: none !important; }
 
 /* 导出不画标题下划线，跟 Typora 的 PDF 一致（编辑器里仍保留） */
 body.mf-export h1,

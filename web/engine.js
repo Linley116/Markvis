@@ -359,7 +359,7 @@
   }
 
   function parseBlocks(src) {
-    var lines = String(src).replace(/\r\n?/g, '\n').split('\n');
+    var lines = String(src).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
     var blocks = [];
     var i = 0;
 
@@ -737,7 +737,8 @@
           '" title="回到引用">↩</a></div>';
 
       case 'meta':
-        return '<pre class="md-block md-meta" mdtype="meta"' + cid + '>' +
+        // 块级用 .md-meta-block（行内标记叫 .md-meta，两者不能共用一个类名）
+        return '<pre class="md-block md-meta-block" mdtype="meta"' + cid + '>' +
           escapeHtml(b.text) + '</pre>';
 
       case 'table':
@@ -2608,6 +2609,8 @@
     var limit = content.h - 80;
 
     for (var i = 0; i < write.children.length; i++) {
+      // front matter 是元数据，和 Typora 一样不进 PDF/HTML 正文
+      if (write.children[i].getAttribute('mdtype') === 'meta') continue;
       var el = write.children[i].cloneNode(true);
       el.classList.remove('mf-focus-current');
 
@@ -2767,6 +2770,7 @@
       '.mf-page { overflow: hidden; }',
       '.mf-page > :first-child { margin-top: 0 !important; }',
       '.md-meta { display: none !important; }',
+      '.md-meta-block { display: none !important; }',
       '.md-inline.md-expand { background: none !important; }',
       '.md-fn-back { display: none !important; }',
       '.mf-anchor { display: none !important; }',
@@ -2817,6 +2821,7 @@
       '#scroll { height: auto !important; overflow: visible !important; }\n' +
       '.mf-anchor { display: none !important; }\n' +
       '.md-meta { display: none !important; }\n' +
+      '.md-meta-block { display: none !important; }\n' +
       '.md-fn-back { display: none !important; }\n' +
       '</style>\n' +
       '</head>\n' +
