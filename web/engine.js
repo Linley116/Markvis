@@ -2880,5 +2880,5 @@
   });
 
   // 通知原生：前端就绪
-  bridge.callHandler('app.ready', { version: '0.6' });
+  bridge.callHandler('app.ready', { version: '0.9' });
 })();

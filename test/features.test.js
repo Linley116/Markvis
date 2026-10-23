@@ -253,6 +253,95 @@ const TABLE_MD = [
   check('切换到 nord', themes[2] === 'nord');
   check('auto 移除属性', themes[3] === null, String(themes[3]));
 
+  console.log('\n[5.1] 自定义主题（桩掉 themes.* 桥，走真实代码路径）');
+  const custom = await page.evaluate(() => {
+    const bridge = window.bridge;
+    const orig = bridge.callHandler;
+    const CSS = '/* @name: 纸墨 */\n/* @base: dark */\n' +
+                ':root{--bg:#101010;--fg:#eeeeee;--mf-editor-width:700px}';
+
+    bridge.callHandler = function (name, data, cb) {
+      if (name === 'themes.list') { if (cb) cb([{ id: 'demo', name: '纸墨' }]); return; }
+      if (name === 'themes.read') { if (cb) cb({ css: CSS, name: '纸墨' }); return; }
+      return orig.call(bridge, name, data, cb);
+    };
+
+    window.MFTheme.reload();
+    window.MFTheme.apply('file:demo');
+
+    const el = document.getElementById('mf-custom-theme');
+    const applied = {
+      base: document.documentElement.getAttribute('data-theme'),
+      injected: el ? el.textContent : '',
+      btn: document.getElementById('mf-theme-btn').textContent,
+      bg: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+      width: getComputedStyle(document.getElementById('write')).maxWidth,
+      list: window.MFTheme.list().map(t => t.id)
+    };
+
+    window.MFTheme.apply('light');
+    const cleared = {
+      base: document.documentElement.getAttribute('data-theme'),
+      style: !!document.getElementById('mf-custom-theme'),
+      width: getComputedStyle(document.getElementById('write')).maxWidth,
+      btn: document.getElementById('mf-theme-btn').textContent
+    };
+
+    bridge.callHandler = orig;
+    return { applied, cleared };
+  });
+  check('自定义主题按 @base 打底', custom.applied.base === 'dark', String(custom.applied.base));
+  check('自定义 CSS 被注入', custom.applied.injected.indexOf('#101010') >= 0, custom.applied.injected.slice(0, 40));
+  check('主题变量真的生效', custom.applied.bg === '#101010', custom.applied.bg);
+  check('主题能改正文栏宽', custom.applied.width === '700px', custom.applied.width);
+  check('按钮显示 @name', custom.applied.btn === '纸墨', custom.applied.btn);
+  check('列表里出现自定义主题', custom.applied.list.indexOf('file:demo') >= 0, custom.applied.list.join(','));
+  check('切回内置主题会移除自定义样式',
+        custom.cleared.style === false && custom.cleared.base === 'light', JSON.stringify(custom.cleared));
+  check('栏宽回到默认三档', custom.cleared.width === '860px', custom.cleared.width);
+
+  const metaCases = await page.evaluate(() => ({
+    doc: window.MFTheme.parseMeta('/*\n *  @name : 这是文档里的说明文字\n */\n/* @name: 纸墨 */\n/* @base: dark */'),
+    bare: window.MFTheme.parseMeta('@name: 简约\n@base: sepia'),
+    none: window.MFTheme.parseMeta(':root{ --bg:#fff }')
+  }));
+  check('多行注释里的说明不会当成 @name',
+        metaCases.doc.name === '纸墨' && metaCases.doc.base === 'dark', JSON.stringify(metaCases.doc));
+  check('裸写指令也能解析',
+        metaCases.bare.name === '简约' && metaCases.bare.base === 'sepia', JSON.stringify(metaCases.bare));
+  check('没有指令时回落 light',
+        metaCases.none.name === '' && metaCases.none.base === 'light', JSON.stringify(metaCases.none));
+
+  console.log('\n[5.2] 主题菜单');
+  const menu = await page.evaluate(() => {
+    window.MFTheme.apply('auto');
+    document.getElementById('mf-theme-btn').click();
+    const el = document.getElementById('mf-theme-menu');
+    const items = Array.from(el.querySelectorAll('[data-theme-id]')).map(i => i.getAttribute('data-theme-id'));
+    const shown = el.classList.contains('mf-show');
+    const acts = Array.from(el.querySelectorAll('[data-action]')).map(a => a.getAttribute('data-action'));
+
+    // 点条目切换
+    const darkItem = el.querySelector('[data-theme-id="dark"]');
+    darkItem.click();
+    const afterClick = {
+      base: document.documentElement.getAttribute('data-theme'),
+      closed: !el.classList.contains('mf-show')
+    };
+
+    // 再开一次，点外面应该收起
+    document.getElementById('mf-theme-btn').click();
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    return { items, shown, acts, afterClick, closedOutside: !el.classList.contains('mf-show') };
+  });
+  check('菜单列出全部内置主题',
+        ['auto', 'light', 'dark', 'sepia', 'nord'].every(id => menu.items.indexOf(id) >= 0),
+        menu.items.join(','));
+  check('菜单有打开文件夹与重新加载', menu.acts.indexOf('open') >= 0 && menu.acts.indexOf('reload') >= 0,
+        menu.acts.join(','));
+  check('点条目切换主题并收起', menu.afterClick.base === 'dark' && menu.afterClick.closed, JSON.stringify(menu.afterClick));
+  check('点菜单外面收起', menu.closedOutside === true);
+
   // ---------------------------------------------------------------- 专注
   console.log('\n[6] 专注模式');
   const focus = await page.evaluate(async () => {

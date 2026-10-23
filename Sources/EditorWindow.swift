@@ -76,6 +76,33 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                 let info = (data as? [String: Any])?["version"] as? String ?? "?"
                 try? "ready \(info)".write(toFile: marker, atomically: true, encoding: .utf8)
             }
+            // 自定义主题自检：MARKFRAME_TEST_THEMES=<marker> 时把主题清单写成 JSON
+            if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_THEMES"] {
+                let list = controller?.themeList() ?? []
+                let ids = list.compactMap { $0["id"] as? String }
+                let firstCSS = ids.first.flatMap { controller?.themeCSS(id: $0)?["css"] as? String } ?? ""
+                let summary: [String: Any] = [
+                    "count": list.count,
+                    "ids": ids,
+                    "names": list.compactMap { $0["name"] as? String },
+                    "cssBytes": firstCSS.count
+                ]
+                if let json = jsonEncode(summary) {
+                    try? json.write(toFile: marker, atomically: true, encoding: .utf8)
+                }
+            }
+            respond(nil)
+
+        case "themes.list":
+            respond(controller?.themeList() ?? [])
+
+        case "themes.read":
+            let dict = data as? [String: Any] ?? [:]
+            let id = dict["id"] as? String ?? ""
+            respond(controller?.themeCSS(id: id))
+
+        case "themes.openFolder":
+            controller?.openThemesFolder()
             respond(nil)
 
         default:
@@ -244,6 +271,90 @@ final class EditorWindowController: NSWindowController {
         applyContent(path: "", content: text, title: L10n.t("Recovered", "已恢复"))
         window?.isDocumentEdited = true
         mfLog("restored \(url.lastPathComponent) (\(text.count) chars)")
+    }
+
+    // MARK: 自定义主题
+
+    /// ~/Library/Application Support/MarkFrame/themes
+    static let themesDir: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return base.appendingPathComponent("MarkFrame/themes", isDirectory: true)
+    }()
+
+    /// 目录不存在就建；里面一个 .css 都没有时，拷一份带注释的示例进去当文档
+    private func prepareThemesFolder() {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: Self.themesDir, withIntermediateDirectories: true)
+
+        let existing = (try? fm.contentsOfDirectory(at: Self.themesDir, includingPropertiesForKeys: nil)) ?? []
+        guard !existing.contains(where: { $0.pathExtension.lowercased() == "css" }) else { return }
+
+        guard let sample = Bundle.main.resourceURL?
+            .appendingPathComponent("web/themes/example.css"),
+              fm.fileExists(atPath: sample.path) else { return }
+        try? fm.copyItem(at: sample, to: Self.themesDir.appendingPathComponent("example.css"))
+    }
+
+    /// 主题文件夹里的 .css 列表（名字优先取文件里的 @name 注释）
+    func themeList() -> [[String: Any]] {
+        prepareThemesFolder()
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(
+            at: Self.themesDir,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]) else { return [] }
+
+        var out: [[String: Any]] = []
+        for url in items where url.pathExtension.lowercased() == "css" {
+            let id = url.deletingPathExtension().lastPathComponent
+            out.append([
+                "id": id,
+                "name": themeDisplayName(at: url) ?? id,
+                "path": url.path
+            ])
+        }
+        return out.sorted { ($0["name"] as? String ?? "") < ($1["name"] as? String ?? "") }
+    }
+
+    /// 读一个主题的 CSS。id 只接受主题目录下的单层文件名，避免路径穿越。
+    func themeCSS(id rawId: String) -> [String: Any]? {
+        var id = rawId
+        if id.lowercased().hasSuffix(".css") { id = String(id.dropLast(4)) }
+        guard !id.isEmpty, !id.contains("/"), !id.contains("..") else { return nil }
+
+        let url = Self.themesDir.appendingPathComponent(id + ".css").standardizedFileURL
+        guard url.path.hasPrefix(Self.themesDir.standardizedFileURL.path + "/") else { return nil }
+
+        let fm = FileManager.default
+        guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? Int, size < 1_000_000 else { return nil }
+        guard let css = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return ["css": css, "name": themeDisplayName(at: url) ?? id]
+    }
+
+    func openThemesFolder() {
+        prepareThemesFolder()
+        NSWorkspace.shared.open(Self.themesDir)
+    }
+
+    /// 只认单行指令：`/* @name: 纸墨 */` 或裸写 `@name: 纸墨`。
+    /// 多行注释里的说明文字（示例文件开头那些）不会被当成指令。
+    private func themeDisplayName(at url: URL) -> String? {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let head = String(text.prefix(2000))
+        let patterns = [
+            "(?m)^\\s*/\\*\\s*@name\\s*:\\s*([^*]+?)\\s*\\*/\\s*$",
+            "(?m)^\\s*@name\\s*:\\s*(.+?)\\s*$"
+        ]
+        for pattern in patterns {
+            guard let re = try? NSRegularExpression(pattern: pattern),
+                  let m = re.firstMatch(in: head, range: NSRange(head.startIndex..., in: head)),
+                  let range = Range(m.range(at: 1), in: head) else { continue }
+            let name = String(head[range]).trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { return name }
+        }
+        return nil
     }
 
     convenience init() {

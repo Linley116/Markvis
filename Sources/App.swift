@@ -280,6 +280,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                      action: #selector(nextTheme(_:)), keyEquivalent: "L")
         theme.keyEquivalentModifierMask = [.command, .shift]
 
+        // 自定义主题：文件夹入口 + 重新加载（改完 CSS 不用重启）
+        viewMenu.addItem(withTitle: L10n.t("Open Theme Folder…", "打开主题文件夹…"),
+                         action: #selector(openThemeFolder(_:)), keyEquivalent: "")
+        viewMenu.addItem(withTitle: L10n.t("Reload Custom Themes", "重新加载自定义主题"),
+                         action: #selector(reloadThemes(_:)), keyEquivalent: "")
+
         viewMenu.addItem(.separator())
         viewMenu.addItem(withTitle: L10n.t("Zoom In", "放大"), action: #selector(zoomIn(_:)), keyEquivalent: "+")
         viewMenu.addItem(withTitle: L10n.t("Zoom Out", "缩小"), action: #selector(zoomOut(_:)), keyEquivalent: "-")
@@ -363,6 +369,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleCode(_ sender: Any?) { js?("window.__cmd('code')") }
     @objc private func toggleSourceMode(_ sender: Any?) { js?("window.__cmd('toggleSource')") }
     @objc private func toggleSpell(_ sender: Any?) { js?("window.__cmd('toggleSpell')") }
+    @objc private func openThemeFolder(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.openFolder()") }
+    @objc private func reloadThemes(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.reload()") }
     @objc private func showFind(_ sender: Any?) { js?("window.MFSearch && window.MFSearch.show()") }
     @objc private func toggleOutline(_ sender: Any?) { js?("window.MFOutline && window.MFOutline.toggle()") }
     @objc private func toggleFocusMode(_ sender: Any?) { js?("window.MFFocus && window.MFFocus.toggleFocus()") }

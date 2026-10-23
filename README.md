@@ -50,7 +50,7 @@ The whole editor is ~6,940 lines: 1,440 Swift, 3,760 web core, 600 features, 1,1
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
 | **Outline** | `Cmd+Shift+O` or the button pinned to the window’s top-left corner — it stays in place after collapsing, so the same click reopens it; drag its right edge to resize (double-click resets, width is remembered) |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
-| **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
+| **Themes** | System / light / dark / sepia / Nord plus your own CSS files, switched from the status-bar theme menu (`Cmd+Shift+L` cycles) |
 | **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |
 | **Footnotes / TOC** | `[^id]` references with click-through to `[^id]: ...` definitions, `[TOC]` rebuilt from the current headings |
 | **Spelling** | System spellcheck while typing (`Cmd+;` to toggle) |
@@ -108,6 +108,30 @@ Four things that silently broke and are now pinned by tests:
 - `PDFPage` holds its `PDFDocument` weakly → merged pages occasionally came out blank. Captured pages are now stored as their `PDFDocument` so the page never outlives its owner.
 - A snapshot-and-slice approach (the first implementation) cannot avoid overlap at page boundaries. It was removed entirely.
 
+### Custom themes
+
+Themes are plain CSS. Drop a file into `~/Library/Application Support/MarkFrame/themes/` and it appears in the theme menu at the bottom-right (the folder is created on first launch with a commented `example.css`; View → Open Theme Folder… jumps there).
+
+```css
+/* @name: Paper */
+/* @base: light */
+
+:root {
+  --bg: #fbf8f3;
+  --fg: #2f2a23;
+  --accent: #8a5a2b;
+  --mf-editor-width: 900px;
+}
+```
+
+- `@name` is the label in the menu; without it the file name is used
+- `@base` picks the palette to start from — `auto`, `light`, `dark`, `sepia` or `nord`. A dark theme should say `dark`, otherwise the parts it does not override stay light
+- Everything is a CSS variable: `--bg`, `--fg`, `--muted`, `--accent`, `--mark`, `--code-bg`, `--border`, `--quote`, the `--hl-*` syntax colours, and `--mf-editor-width` for the reading column
+- Only single-line directives count (`/* @name: x */` or a bare `@name: x` line), so prose inside a longer comment block is not misread as metadata
+- The last CSS that was loaded is cached in `localStorage`, so the theme paints before the file is read; **Reload Custom Themes** re-reads it after an edit
+
+> The theme menu itself is labelled in Chinese (主题 / 自定义 / 打开主题文件夹…), like the rest of the editor chrome.
+
 ### Build
 
 Requirements: macOS 13+, Swift 6 toolchain (`xcode-select --install`). No npm, no Xcode project, no dependencies.
@@ -148,7 +172,7 @@ To keep the build artifact for distribution:
 
 ```bash
 NODE_PATH=./node_modules node test/engine.test.js      # 83 assertions — core loop
-NODE_PATH=./node_modules node test/features.test.js    # 47 assertions — features
+NODE_PATH=./node_modules node test/features.test.js    # 68 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
 ```
@@ -162,11 +186,12 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 - Undo is browser-native in live mode and textarea-native in source mode; they are not unified.
 - Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
 - Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
+- Custom themes are CSS only (no scripts), and PDF export always uses the light print palette — a dark theme does not turn the PDF black.
 - The app is ad-hoc signed. Do not distribute the built `.app` without notarizing it.
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. Short version: custom themes, unified undo stack, nested blocks, file tree.
+See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. Short version: unified undo stack, nested blocks, file tree, incremental save.
 
 ### License
 

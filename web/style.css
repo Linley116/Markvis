@@ -11,6 +11,9 @@
   --focus-dim: .26;
   --panel-shadow: 0 8px 28px rgba(0, 0, 0, .13);
 
+  /* 正文栏宽。自定义主题可以覆盖它（注入的样式在最后，优先级更高） */
+  --mf-editor-width: 860px;
+
   /* 代码高亮 */
   --hl-keyword: #d73a49;
   --hl-string: #032f62;
@@ -149,7 +152,7 @@ body {
    原来是固定 720px，1440 的窗口里只用掉一半，长文读起来像信纸。 */
 #write, #source {
   width: 100%;
-  max-width: 860px;
+  max-width: var(--mf-editor-width);
   margin: 0 auto;
   padding: 56px 40px 40vh;
   outline: none;
@@ -157,11 +160,11 @@ body {
 }
 
 @media only screen and (min-width: 1400px) {
-  #write, #source { max-width: 1024px; }
+  :root { --mf-editor-width: 1024px; }
 }
 
 @media only screen and (min-width: 1800px) {
-  #write, #source { max-width: 1200px; }
+  :root { --mf-editor-width: 1200px; }
 }
 
 /* 窄窗口别再往外挤：左右内边距收到 28px（Typora 在 500px 以下也做同样的事） */
@@ -795,11 +798,103 @@ body.mf-focus #write > .md-block.mf-focus-current {
 
 #status button.mf-chip:hover { color: var(--accent); border-color: var(--accent); }
 
+/* 主题名可能很长（自定义主题），别把状态栏撑开 */
+#mf-theme-btn {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 主题名可能很长（自定义主题），别把状态栏撑开 */
+#mf-theme-btn {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 主题菜单（状态栏按钮上方） ---------- */
+
+#mf-theme-menu {
+  position: fixed;
+  z-index: 60;
+  display: none;
+  min-width: 208px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--panel-shadow);
+  font-size: 12.5px;
+  user-select: none;
+}
+
+#mf-theme-menu.mf-show { display: block; }
+
+.mf-menu-title {
+  padding: 4px 8px 3px;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mf-menu-item,
+.mf-menu-act {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mf-menu-item:hover,
+.mf-menu-act:hover { background: var(--code-bg); }
+
+.mf-menu-item.mf-on { color: var(--accent); }
+
+.mf-menu-check {
+  width: 16px;
+  flex: 0 0 16px;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.mf-menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mf-menu-sep {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--border);
+}
+
+.mf-menu-empty {
+  padding: 4px 8px 6px;
+  max-width: 220px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 /* ---------- 导出 / 打印 ---------- */
 
 body.mf-export #status,
 body.mf-export #mf-outline,
 body.mf-export #mf-outline-btn,
+body.mf-export #mf-theme-menu,
 body.mf-export #mf-search {
   display: none !important;
 }
@@ -884,7 +979,7 @@ body.mf-export h3 { font-size: 1.2em; }
     overflow: visible !important;
   }
 
-  #status, #mf-outline, #mf-outline-btn, #mf-search { display: none !important; }
+  #status, #mf-outline, #mf-outline-btn, #mf-theme-menu, #mf-search { display: none !important; }
   body.mf-outline-open #scroll { margin-left: 0 !important; }
   #scroll { height: auto !important; overflow: visible !important; }
   #write { max-width: none !important; padding: 0 !important; }

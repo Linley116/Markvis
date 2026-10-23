@@ -1,0 +1,50 @@
+/* MarkFrame 主题示例（纸墨）
+ *
+ * 用法：把任何 .css 放进
+ *   ~/Library/Application Support/MarkFrame/themes/
+ * 然后在窗口右下角的主题菜单里选中它。改完存盘，菜单里点「重新加载」即可生效。
+ *
+ * 文件头两行是可选元信息：
+ *   @name : 显示在主题菜单里的名字（缺省用文件名）
+ *   @base : 打底的主题，取 auto / light / dark / sepia / nord。
+ *           做暗色主题就写 dark —— 没被覆盖的颜色仍然是深色版，不会出现白底黑字。
+ *
+ * 下面这些变量都可以覆盖，不写就沿用 @base 的值。
+ */
+
+/* @name: 纸墨 */
+/* @base: light */
+
+:root {
+  --bg: #fbf8f3;
+  --fg: #2f2a23;
+  --muted: #9b9284;
+  --accent: #8a5a2b;
+  --mark: #cfc4b1;
+  --code-bg: #f3ede2;
+  --border: #e8e0d2;
+  --quote: #dccfb9;
+
+  /* 正文栏宽。默认跟随窗口三档（860 / 1024 / 1200），写死就固定这个宽度 */
+  --mf-editor-width: 900px;
+
+  /* 代码高亮 */
+  --hl-keyword: #9a4a2f;
+  --hl-string: #5c6b33;
+  --hl-comment: #a49a86;
+  --hl-number: #8a5a2b;
+  --hl-title: #6b4f8a;
+  --hl-builtin: #a8662c;
+  --hl-tag: #47744f;
+
+  /* 专注模式里非当前段的透明度（0 = 完全隐去，1 = 不淡化） */
+  --focus-dim: .22;
+
+  /* 浮层（查找框、公式编辑器）的投影 */
+  --panel-shadow: 0 8px 28px rgba(80, 60, 30, .16);
+}
+
+/* 也可以直接写常规选择器，比如给一级标题换字体 */
+#write h1 {
+  letter-spacing: -0.01em;
+}

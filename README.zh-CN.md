@@ -51,7 +51,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
 | **大纲** | `Cmd+Shift+O` 或窗口左上角的常驻按钮 —— 收起后按钮停在原位，再点一下即展开；拖右边缘可调宽（双击复位、宽度记忆） |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
-| **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，`Cmd+Shift+L` |
+| **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，以及自己放进主题文件夹的 CSS；状态栏主题菜单切换，`Cmd+Shift+L` 循环 |
 | **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，点一下弹出源码浮层直接改 |
 | **脚注 / 目录** | `[^id]` 引用 + `[^id]: ...` 定义（点击互相跳转），`[TOC]` 按当前标题自动重建 |
 | **拼写检查** | 输入时用系统词典检查（`Cmd+;` 切换） |
@@ -109,6 +109,30 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 - `PDFPage` 对 `PDFDocument` 是弱引用 → 合并时偶尔出现空页。现在改为保存 `PDFDocument` 本身，页面不再比它的宿主活得久。
 - 最初的「整页快照 + 坐标切片」方案在页边界必然重叠，已整体删除。
 
+### 自定义主题
+
+主题就是一份普通的 CSS。把文件丢进 `~/Library/Application Support/MarkFrame/themes/`，它就会出现在右下角的主题菜单里（首次启动会自动建好目录并放一份带注释的 `example.css`；菜单 →「打开主题文件夹…」也能直接跳过去）。
+
+```css
+/* @name: 纸墨 */
+/* @base: light */
+
+:root {
+  --bg: #fbf8f3;
+  --fg: #2f2a23;
+  --accent: #8a5a2b;
+  --mf-editor-width: 900px;
+}
+```
+
+- `@name` 是菜单里显示的名字，不写就用文件名
+- `@base` 指定打底的主题：`auto` / `light` / `dark` / `sepia` / `nord`。做暗色主题一定要写 `dark`，否则没被覆盖到的部分还是亮色
+- 所有颜色都是 CSS 变量：`--bg`、`--fg`、`--muted`、`--accent`、`--mark`、`--code-bg`、`--border`、`--quote`，代码高亮是 `--hl-*`，正文栏宽是 `--mf-editor-width`
+- 只认单行指令（`/* @name: x */` 或裸写 `@name: x`），所以多行注释里的说明文字不会被误当成元信息
+- 上次加载的 CSS 会缓存在 `localStorage`，启动时先顶上再读盘；改完文件在菜单里点「重新加载」即可生效
+
+> 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
+
 ### 构建
 
 要求：macOS 13+、Swift 6 工具链（`xcode-select --install`）。不需要 npm、不需要 Xcode 工程、没有第三方依赖。
@@ -149,7 +173,7 @@ cd markframe
 
 ```bash
 NODE_PATH=./node_modules node test/engine.test.js      # 83 项 —— 核心闭环
-NODE_PATH=./node_modules node test/features.test.js    # 47 项 —— 功能
+NODE_PATH=./node_modules node test/features.test.js    # 68 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
 ```
@@ -163,11 +187,12 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 - 撤销在实时模式下走浏览器、源码模式下走 textarea，两边没有统一。
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
 - 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
+- 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
 - app 是 ad-hoc 签名，未公证前不要分发构建产物。
 
 ### 路线图
 
-见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着待修 bug 列表、待做功能列表和踩坑记录。简版：自定义主题、统一撤销栈、嵌套块、文件树。
+见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着待修 bug 列表、待做功能列表和踩坑记录。简版：统一撤销栈、嵌套块、文件树、增量落盘。
 
 ### 许可证
 
