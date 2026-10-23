@@ -2138,7 +2138,8 @@
     if (document.activeElement === write) updateExpand();
   });
 
-  // 粘贴：图片走原生存盘，其余只取纯文本（避免带入外部 HTML）
+  // 粘贴：图片走原生存盘；富文本（text/html）转成 Markdown 再插入；
+  // 剪贴板来自代码编辑器（HTML 全是 span）或没有富文本时按纯文本插
   write.addEventListener('paste', function (e) {
     var items = (e.clipboardData && e.clipboardData.items) || [];
 
@@ -2152,9 +2153,94 @@
     }
 
     e.preventDefault();
-    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-    programEdit(function () { document.execCommand('insertText', false, text); });
+    var cd = e.clipboardData || window.clipboardData;
+    insertMarkdownAtCaret(pasteAsMarkdown(cd));
   });
+
+  // 源码模式：有富文本也转成 markdown 插进 textarea，否则走浏览器默认
+  source.addEventListener('paste', function (e) {
+    var cd = e.clipboardData || window.clipboardData;
+    if (!cd || !window.htmlToMarkdown) return;
+    var html = '';
+    try { html = cd.getData('text/html') || ''; } catch (err) {}
+    if (!window.htmlToMarkdown.isRich(html)) return;
+    e.preventDefault();
+    var md = window.htmlToMarkdown(html);
+    programEdit(function () {
+      source.setRangeText(md, source.selectionStart, source.selectionEnd, 'end');
+      setEdited(true);
+    });
+  });
+
+  /** 剪贴板 → 要插入的 markdown：有块级结构的富文本就转换，否则用纯文本 */
+  function pasteAsMarkdown(cd) {
+    if (!cd) return '';
+    var plain = '', html = '';
+    try { plain = cd.getData('text/plain') || ''; } catch (e) {}
+    try { html = cd.getData('text/html') || ''; } catch (e) {}
+    if (html && window.htmlToMarkdown && window.htmlToMarkdown.isRich(html)) {
+      var md = window.htmlToMarkdown(html);
+      if (md && md.trim()) return md;
+    }
+    return plain;
+  }
+
+  /** 把 markdown 插到光标处：多块内容拆块重解析，光标落到粘贴内容末尾 */
+  function insertMarkdownAtCaret(md) {
+    if (!md) return;
+    programEdit(function () {
+      var sel = window.getSelection();
+      var node = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+
+      // 表格单元格里：多块内容没意义，按单行文本插
+      var cell = closestCell(node);
+      if (cell) {
+        document.execCommand('insertText', false, md.replace(/\s*\n\s*/g, ' '));
+        markDirtyFromCaret();
+        setEdited(true);
+        return;
+      }
+
+      var leaf = leafBlock();
+      var top = leaf ? (topBlockOf(leaf) || leaf) : null;
+      if (!top) {
+        document.execCommand('insertText', false, md);
+        setEdited(true);
+        return;
+      }
+
+      var raw = blockRaw(top);
+      var off = caretSourceOffset(top);
+      var before = raw.slice(0, off);
+      var after = raw.slice(off);
+
+      var parts = [];
+      if (before.trim()) parts.push(before);
+      var mdIdx = parts.length;
+      parts.push(md);
+      if (after.trim()) parts.push(after);
+      var nextSrc = parts.join('\n\n');
+
+      // 光标目标：粘贴内容末尾在新源码里的偏移
+      var endOff = md.length;
+      for (var i = 0; i < mdIdx; i++) endOff += parts[i].length + 2;
+
+      var created = reparseInto(top, nextSrc, null);
+      // 找到承载 endOff 的新块，把光标放进去
+      var acc = 0, target = null, targetOff = endOff;
+      for (var j = 0; j < created.length; j++) {
+        var len = blockRaw(created[j]).length;
+        if (endOff <= acc + len || j === created.length - 1) {
+          target = created[j];
+          targetOff = endOff - acc;
+          break;
+        }
+        acc += len + 2;
+      }
+      if (target) setCaretBySourceOffset(target, Math.max(0, targetOff));
+      setEdited(true);
+    });
+  }
 
   /** 把剪贴板里的图片交给原生落盘，再插入相对路径 */
   function insertImageFile(file) {

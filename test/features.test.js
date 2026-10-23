@@ -585,6 +585,150 @@ const TABLE_MD = [
   check('底部有「打开文件夹…」和「刷新」', lib.rootbar.hasOpen && lib.rootbar.hasRefresh, JSON.stringify(lib.rootbar));
   check('可以收起', lib.closed === true);
 
+  console.log('\n[13] 粘贴 HTML → Markdown（F10）');
+  const conv = html => page.evaluate(h => window.htmlToMarkdown(h), html);
+
+  const c1 = await conv('<h1>大标题</h1><p>这是<strong>粗体</strong>和<em>斜体</em>，还有<code>代码</code>与<a href="https://example.com">链接</a>。</p>');
+  check('标题与行内标记', c1 === '# 大标题\n\n这是**粗体**和*斜体*，还有`代码`与[链接](https://example.com)。', JSON.stringify(c1));
+
+  const c2 = await conv('<ul><li>甲<ul><li>甲一</li></ul></li><li><input type="checkbox" checked>已完成</li><li><input type="checkbox">未完成</li></ul>');
+  check('嵌套列表与任务清单',
+        c2 === '- 甲\n  - 甲一\n- [x] 已完成\n- [ ] 未完成', JSON.stringify(c2));
+
+  const c3 = await conv('<blockquote><p>引用一段</p><p>第二段</p></blockquote>');
+  check('引用块', c3 === '> 引用一段\n>\n> 第二段', JSON.stringify(c3));
+
+  const c4 = await conv('<pre><code class="language-js">const a = 1;\nconst b = 2;</code></pre>');
+  check('代码块带语言', c4 === '```js\nconst a = 1;\nconst b = 2;\n```', JSON.stringify(c4));
+
+  const c5 = await conv('<table><tr><th align="left">名称</th><th align="right">数量</th><th>价格</th></tr><tr><td>苹果</td><td>3</td><td>1.5</td></tr></table>');
+  check('表格与对齐',
+        c5 === '| 名称 | 数量 | 价格 |\n| :--- | ---: | --- |\n| 苹果 | 3 | 1.5 |', JSON.stringify(c5));
+
+  const c6 = await conv('<p>第一行<br>第二行</p><hr><p>尾</p>');
+  check('硬换行与分隔线', c6 === '第一行  \n第二行\n\n---\n\n尾', JSON.stringify(c6));
+
+  const c7 = await conv('<p class="MsoNormal"><b>Word 标题</b></p><p>Word 正文</p>');
+  check('Word 风格 HTML（Mso 类名不影响）', c7 === '**Word 标题**\n\nWord 正文', JSON.stringify(c7));
+
+  const c8 = await conv('<img src="https://example.com/a.png" alt="示意图">');
+  check('图片', c8 === '![示意图](https://example.com/a.png)', JSON.stringify(c8));
+
+  const richFlags = await page.evaluate(() => ({
+    browser: window.htmlToMarkdown.isRich('<p>段落</p>'),
+    vscode: window.htmlToMarkdown.isRich('<span class="mtk1">const</span> <span class="mtk7">x</span> = 1'),
+    empty: window.htmlToMarkdown.isRich('')
+  }));
+  check('能区分富文本与代码编辑器的高亮 HTML',
+        richFlags.browser === true && richFlags.vscode === false && richFlags.empty === false, JSON.stringify(richFlags));
+
+  // ---- 集成：走真实 paste 事件 ----
+  const pasteRich = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '原文档', 't.md');
+    await wait(120);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    p.focus();
+    window.MF.setCaretBySourceOffset(p, 0);
+
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<h2>小节</h2><p>粘贴的<strong>正文</strong></p><ul><li>要点一</li><li>要点二</li></ul>');
+    dt.setData('text/plain', '小节\n粘贴的正文\n要点一\n要点二');
+    p.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await wait(250);
+
+    return {
+      md: window.__getMarkdown(),
+      h2: !!document.querySelector('#write h2'),
+      ul: document.querySelectorAll('#write ul li').length,
+      caret: (() => {
+        const sel = window.getSelection();
+        const leaf = window.MF.leafBlock ? window.MF.leafBlock() : null;
+        return { inWrite: document.activeElement === document.getElementById('write'), hasSel: sel.rangeCount > 0, leaf: !!leaf };
+      })()
+    };
+  });
+  check('富文本粘贴成多个块',
+        pasteRich.md === '## 小节\n\n粘贴的**正文**\n\n- 要点一\n- 要点二\n\n原文档',
+        JSON.stringify(pasteRich.md));
+  check('粘贴产出 h2 与列表', pasteRich.h2 && pasteRich.ul === 2, JSON.stringify([pasteRich.h2, pasteRich.ul]));
+
+  const pasteMid = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '前半后半', 't.md');
+    await wait(120);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    p.focus();
+    window.MF.setCaretBySourceOffset(p, 2);   // 光标在「前半」后
+
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<p>插入内容</p>');
+    dt.setData('text/plain', '插入内容');
+    p.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await wait(250);
+    return window.__getMarkdown();
+  });
+  check('段中粘贴把当前块拆开', pasteMid === '前半\n\n插入内容\n\n后半', JSON.stringify(pasteMid));
+
+  const pasteCell = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '| A | B |\n|---|---|\n| 1 | 2 |\n', 't.md');
+    await wait(150);
+    const cell = document.querySelector('#write td');
+    cell.focus();
+    window.MF.setCaretBySourceOffset(cell, 0);
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<p>多行</p><p>内容</p>');
+    dt.setData('text/plain', '多行 内容');
+    cell.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await wait(250);
+    const t = document.querySelector('#write table');
+    return { rows: t.querySelectorAll('tr').length, md: window.__getMarkdown() };
+  });
+  check('表格单元格里粘贴不拆表', pasteCell.rows === 2 && /多行 内容/.test(pasteCell.md), JSON.stringify(pasteCell));
+
+  const pastePlain = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '占位', 't.md');
+    await wait(120);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    p.focus();
+    window.MF.setCaretBySourceOffset(p, 0);
+
+    // 代码编辑器复制的 HTML：全是 span，没有块级结构 → 应该用 text/plain（markdown 源码）
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<span class="mtk1">const</span> <span class="mtk7">x</span> <span class="mtk8">=</span> <span class="mtk4">1</span>');
+    dt.setData('text/plain', '# 标题\n\n**粗体**');
+    p.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await wait(250);
+    return window.__getMarkdown();
+  });
+  check('代码编辑器来源走纯文本（markdown 源码原样插入）',
+        pastePlain === '# 标题\n\n**粗体**\n\n占位', JSON.stringify(pastePlain));
+
+  const pasteSource = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '源码文档', 't.md');
+    await wait(120);
+    window.__cmd('toggleSource');
+    await wait(150);
+    const src = document.getElementById('source');
+    src.focus();
+    src.setSelectionRange(0, 0);
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<h1>标题</h1><p>内容</p>');
+    dt.setData('text/plain', '标题 内容');
+    src.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await wait(250);
+    const val = src.value;
+    window.__cmd('toggleSource');
+    await wait(150);
+    return { val, md: window.__getMarkdown() };
+  });
+  check('源码模式粘贴也转 markdown',
+        pasteSource.val === '# 标题\n\n内容源码文档' && pasteSource.md === '# 标题\n\n内容源码文档',
+        JSON.stringify(pasteSource));
+
   console.log('\n[11] 运行时错误');
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 
