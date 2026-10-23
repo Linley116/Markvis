@@ -223,6 +223,21 @@ const TABLE_MD = [
   check('宽度写入 localStorage', resized.saved === '320', resized.saved);
   check('双击复位到 240', resized.reset === 240, resized.reset);
 
+  console.log('\n[4.2] 正文栏宽（对齐 Typora 的 860 / 1024 / 1200 三档）');
+  const col = await page.evaluate(() => {
+    const el = document.getElementById('write');
+    const cs = getComputedStyle(el);
+    const box = el.getBoundingClientRect().width;
+    return {
+      inner: Math.round(box - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)),
+      avail: document.getElementById('scroll').clientWidth,
+      cap: parseFloat(cs.maxWidth)
+    };
+  });
+  check('栏宽上限不小于 860px', col.cap >= 860, JSON.stringify(col));
+  check('正文用满可用宽度（不再固定 720）',
+        col.inner === Math.round(Math.min(col.cap, col.avail) - 80), JSON.stringify(col));
+
   // ---------------------------------------------------------------- 主题
   console.log('\n[5] 主题');
   const themes = await page.evaluate(() => {

@@ -144,12 +144,29 @@ body {
   overflow-x: hidden;
 }
 
+/* 正文栏宽对齐 Typora 默认主题（github.css）的三级断点：
+   860px → 窗口 ≥1400px 时 1024px → ≥1800px 时 1200px。
+   原来是固定 720px，1440 的窗口里只用掉一半，长文读起来像信纸。 */
 #write, #source {
-  max-width: 720px;
+  width: 100%;
+  max-width: 860px;
   margin: 0 auto;
-  padding: 56px 48px 40vh;
+  padding: 56px 40px 40vh;
   outline: none;
   caret-color: var(--accent);
+}
+
+@media only screen and (min-width: 1400px) {
+  #write, #source { max-width: 1024px; }
+}
+
+@media only screen and (min-width: 1800px) {
+  #write, #source { max-width: 1200px; }
+}
+
+/* 窄窗口别再往外挤：左右内边距收到 28px（Typora 在 500px 以下也做同样的事） */
+@media only screen and (max-width: 720px) {
+  #write, #source { padding-left: 28px; padding-right: 28px; }
 }
 
 #source {
