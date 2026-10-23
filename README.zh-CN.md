@@ -34,14 +34,14 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 6,150 行：Swift 1,370 行、Web 内核 3,300 行、功能模块 500 行、测试 970 行。
+整个编辑器约 6,270 行：Swift 1,390 行、Web 内核 3,400 行、功能模块 500 行、测试 970 行。
 
 ### 功能
 
 | 分类 | 能力 |
 |---|---|
 | **块级** | 段落、H1–H6、引用、有序/无序列表、围栏代码、表格、分隔线、YAML front matter、GFM 软/硬换行 |
-| **行内** | 粗体、斜体、行内代码、删除线、链接、图片、括号/引号自动配对 |
+| **行内** | 粗体、斜体、行内代码、删除线、行内链接与引用式链接、图片、括号/引号自动配对 |
 | **实时预览** | 无损 DOM：行内元素的源码标记是**真实的隐藏文本节点**，Markdown 从 DOM 反推，不靠影子缓冲区 |
 | **200ms 画笔** | 只重绘脏块；块内 HTML 相同就完全不碰 DOM |
 | **`expand`** | 光标移进 `**粗体**`，标记浮出来 —— 而且可编辑：能删掉一个 `*`、能用方向键穿过去、能在中间插字 |
@@ -147,7 +147,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 63 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 69 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 40 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容

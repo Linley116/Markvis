@@ -445,6 +445,35 @@ function check(name, cond, extra) {
   check('拼写检查默认开启', spell.before === 'true', spell.before);
   check('拼写检查可关闭/恢复', spell.off === 'false' && spell.back === 'true', JSON.stringify(spell));
 
+  console.log('\n[7.10] 定义式链接（F7b）');
+  const refLinks = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = [
+      '[示例][ref] 与 [同名][] 两种写法。',
+      '',
+      '[ref]: https://example.com/a "标题A"',
+      '[同名]: https://example.com/b'
+    ].join('\n');
+    window.__loadContent('', src, 't');
+    await wait(120);
+    const links = [...document.querySelectorAll('[mdtype="link_ref"] a')].map(a => ({
+      href: a.getAttribute('href'),
+      text: a.textContent,
+      title: a.getAttribute('title')
+    }));
+    const defs = [...document.querySelectorAll('[mdtype="def_link"]')].map(d => ({
+      label: d.getAttribute('data-label'),
+      body: d.querySelector('.md-link-body').textContent
+    }));
+    return { links, defs, md: window.__getMarkdown() };
+  });
+  check('引用式链接解析出定义地址', refLinks.links[0] && refLinks.links[0].href === 'https://example.com/a', JSON.stringify(refLinks.links[0]));
+  check('定义里的 title 传给了 a', refLinks.links[0] && refLinks.links[0].title === '标题A', JSON.stringify(refLinks.links[0]));
+  check('[text][] 省略式按文本匹配定义', refLinks.links[1] && refLinks.links[1].href === 'https://example.com/b', JSON.stringify(refLinks.links[1]));
+  check('定义块渲染出两条', refLinks.defs.length === 2 && refLinks.defs[0].label === 'ref', JSON.stringify(refLinks.defs));
+  check('往返保留引用形式', /\[示例\]\[ref\]/.test(refLinks.md), refLinks.md.split('\n')[0]);
+  check('往返保留定义行', /\[ref\]: https:\/\/example\.com\/a "标题A"/.test(refLinks.md), JSON.stringify(refLinks.md));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

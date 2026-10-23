@@ -33,14 +33,14 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~6,150 lines: 1,370 Swift, 3,300 web core, 500 features, 970 tests.
+The whole editor is ~6,270 lines: 1,390 Swift, 3,400 web core, 500 features, 970 tests.
 
 ### Features
 
 | Area | What works |
 |---|---|
 | **Editing** | Paragraphs, H1–H6, quotes, ordered/unordered lists, fenced code, tables, horizontal rules, YAML front matter, GFM soft/hard line breaks |
-| **Inline** | Bold, italic, inline code, strikethrough, links, images, bracket/quote auto-pairing |
+| **Inline** | Bold, italic, inline code, strikethrough, inline and reference links, images, bracket/quote auto-pairing |
 | **Live preview** | Lossless DOM: inline elements hold their source markers as real, hidden text nodes — Markdown is reconstructed from the DOM, not a shadow buffer |
 | **200 ms brush** | Only dirty blocks get re-rendered; identical HTML means zero DOM writes |
 | **`expand`** | Move the caret into `**bold**`, the markers float back into view — and they are editable: delete one `*`, arrow through them, type between them |
@@ -146,7 +146,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 63 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 69 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content

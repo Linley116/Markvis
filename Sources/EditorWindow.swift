@@ -877,6 +877,21 @@ final class EditorWindowController: NSWindowController {
 // MARK: - 页面加载完成
 
 extension EditorWindowController: WKNavigationDelegate {
+    /// 正文里点链接不能把编辑器本身导航走（WKWebView 默认会直接加载目标页面），
+    /// 一律取消并用系统默认浏览器打开。页面自身的 file:// 加载照常放行。
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let url = navigationAction.request.url,
+           let scheme = url.scheme?.lowercased(),
+           scheme == "http" || scheme == "https" || scheme == "mailto" {
+            decisionHandler(.cancel)
+            NSWorkspace.shared.open(url)
+            return
+        }
+        decisionHandler(.allow)
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         // 页面就绪后再补上启动时排队的文件（新的打开请求优先，丢弃旧的排队内容）
         if let path = pendingLoadPath {

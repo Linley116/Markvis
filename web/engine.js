@@ -189,6 +189,21 @@
         }
       }
 
+      // 引用式链接 [text][id]（id 省略时用 text 当 label）
+      if (c === '[') {
+        var mRef = /^\[([^\]]+)\]\[([^\]]*)\]/.exec(src.slice(i));
+        if (mRef) {
+          flush();
+          out.push({
+            type: 'link_ref',
+            label: mRef[2] || mRef[1],
+            children: parseInline(mRef[1])
+          });
+          i += mRef[0].length;
+          continue;
+        }
+      }
+
       // 链接
       if (c === '[') {
         var mLink = /^\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/.exec(src.slice(i));
@@ -314,10 +329,28 @@
   }
 
 
+  var LINK_DEF_RE = /^\[([^\[\]^][^\[\]]*)\]:[ \t]*(\S+)(?:[ \t]+"([^"]*)")?[ \t]*$/;
+
+  function scanLinkDefs(lines) {
+    var found = null;
+    for (var k = 0; k < lines.length; k++) {
+      var m = LINK_DEF_RE.exec(lines[k]);
+      if (m) {
+        if (!found) found = {};
+        found[m[1]] = { href: m[2], title: m[3] || '' };
+      }
+    }
+    return found;
+  }
+
   function parseBlocks(src) {
     var lines = String(src).replace(/\r\n?/g, '\n').split('\n');
     var blocks = [];
     var i = 0;
+
+    // 引用式链接的定义可能出现在使用之后，先整篇扫一遍
+    var defs = scanLinkDefs(lines);
+    if (defs) linkDefs = defs;
 
     while (i < lines.length) {
       var line = lines[i];
@@ -444,6 +477,19 @@
         continue;
       }
 
+      // 引用式链接的定义 [id]: url "title"
+      var mLinkDef = LINK_DEF_RE.exec(line);
+      if (mLinkDef) {
+        blocks.push({
+          type: 'def_link',
+          label: mLinkDef[1],
+          href: mLinkDef[2],
+          title: mLinkDef[3] || ''
+        });
+        i++;
+        continue;
+      }
+
       // [TOC] 目录占位（内容在渲染后由 refreshTOC 生成）
       if (/^\s*\[TOC\]\s*$/i.test(line)) {
         blocks.push({ type: 'toc' });
@@ -473,6 +519,7 @@
         if (/^\s*>/.test(l)) break;
         if (/^(\s*)([-*+]|\d+[.)])\s+/.test(l)) break;
         if (/^\[\^[^\]\s]+\]:/.test(l)) break;
+        if (LINK_DEF_RE.test(l)) break;
         if (/^\s*\[TOC\]\s*$/i.test(l)) break;
         if (isFenceLine(l)) break;
         if (isHrLine(l)) break;
@@ -535,6 +582,17 @@
           return '<span class="md-inline" mdtype="link">' + metaHTML('open', '[') +
             '<a href="' + escapeAttr(n.href) + '">' + renderInline(n.children) + '</a>' +
             metaHTML('close', '](' + n.href + ')') + '</span>';
+
+        case 'link_ref': {
+          var ldef = linkDefs[n.label];
+          var lhref = ldef ? ldef.href : '';
+          var ltitle = ldef ? ldef.title : '';
+          return '<span class="md-inline" mdtype="link_ref" data-label="' + escapeAttr(n.label) + '">' +
+            metaHTML('open', '[') +
+            '<a href="' + escapeAttr(lhref || '#') + '"' + (ltitle ? ' title="' + escapeAttr(ltitle) + '"' : '') +
+            ' data-label="' + escapeAttr(n.label) + '">' + renderInline(n.children) + '</a>' +
+            metaHTML('close', '][' + n.label + ']') + '</span>';
+        }
 
         case 'autolink':
           return '<span class="md-inline" mdtype="autolink">' + metaHTML('open', '<') +
@@ -600,6 +658,13 @@
         // 目录内容由 refreshTOC() 生成；整块不可编辑，当作原子处理
         return '<div class="md-block md-toc" mdtype="toc" contenteditable="false" data-src="[TOC]"' + cid + '></div>';
 
+      case 'def_link':
+        return '<div class="md-block md-fn-def md-link-def" mdtype="def_link" data-label="' +
+          escapeAttr(b.label) + '"' + cid + '>' +
+          '<span class="md-fn-mark" contenteditable="false">[' + escapeHtml(b.label) + ']</span>' +
+          '<span class="md-link-body">' + escapeHtml(b.href) +
+          (b.title ? ' "' + escapeHtml(b.title) + '"' : '') + '</span></div>';
+
       case 'def_footnote':
         return '<div class="md-block md-fn-def" mdtype="def_footnote" data-label="' +
           escapeAttr(b.label) + '"' + cid + '>' +
@@ -655,6 +720,10 @@
   }
 
   var doc = [];
+
+  /** 引用式链接的定义表：label -> { href, title }。
+      每次整篇解析时重建；逐块重解析（画笔）不会把它清空。 */
+  var linkDefs = {};
 
   /** 当前文档所在目录（带尾斜杠）。渲染 <img> 时把相对路径解析成 file:// 绝对地址，
       否则相对地址会落到 bundle 的 web/ 里。序列化仍用 data-src 里的原始相对路径。 */
@@ -910,6 +979,12 @@
 
       case 'toc':
         return el.getAttribute('data-src') || '[TOC]';
+
+      case 'def_link': {
+        var bodyEl = el.querySelector('.md-link-body');
+        var rawBody = bodyEl ? inlineRaw(bodyEl).trim() : '';
+        return '[' + (el.getAttribute('data-label') || '') + ']: ' + rawBody;
+      }
 
       case 'def_footnote': {
         var fnBodyEl = el.querySelector('.md-fn-body');
