@@ -539,7 +539,7 @@ a:hover { text-decoration: underline; }
   left: 0;
   top: 0;
   bottom: 30px;
-  width: 240px;
+  width: var(--mf-outline-w, 240px);
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -552,10 +552,46 @@ a:hover { text-decoration: underline; }
 body.mf-outline-open #mf-outline { transform: none; }
 
 body.mf-outline-open #scroll {
-  margin-left: 240px;
+  margin-left: var(--mf-outline-w, 240px);
 }
 
 #scroll { transition: margin-left .18s ease; }
+
+/* 拖拽调宽时别让过渡拖后腿 */
+body.mf-resizing #scroll { transition: none; }
+
+/* 右边缘的拖拽条：拖动调整宽度，双击复位 */
+.mf-outline-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.mf-outline-resizer::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background .12s;
+}
+
+.mf-outline-resizer:hover::after,
+.mf-outline-resizer.mf-dragging::after {
+  background: var(--accent);
+  opacity: .55;
+}
+
+#mf-outline-btn.mf-on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 .mf-outline-head {
   display: flex;

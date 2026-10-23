@@ -33,7 +33,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~6,770 lines: 1,410 Swift, 3,860 web core, 500 features, 980 tests.
+The whole editor is ~6,940 lines: 1,440 Swift, 3,760 web core, 600 features, 1,130 tests.
 
 ### Features
 
@@ -48,7 +48,7 @@ The whole editor is ~6,770 lines: 1,410 Swift, 3,860 web core, 500 features, 980
 | **Multi-document** | One document per window, native macOS tab groups (`Cmd+T`), opening a file never clobbers the current one |
 | **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-aware column widths |
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
-| **Outline** | `Cmd+Shift+O`, heading tree with current-section tracking |
+| **Outline** | `Cmd+Shift+O` or the “大纲” chip in the status bar; drag its right edge to resize (double-click resets, width is remembered) |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
 | **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |
@@ -148,7 +148,7 @@ To keep the build artifact for distribution:
 
 ```bash
 NODE_PATH=./node_modules node test/engine.test.js      # 83 assertions — core loop
-NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
+NODE_PATH=./node_modules node test/features.test.js    # 47 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
 ```

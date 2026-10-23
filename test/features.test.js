@@ -148,6 +148,49 @@ const TABLE_MD = [
   const collapsed = await page.evaluate(() => document.body.classList.contains('mf-outline-open'));
   check('Cmd+Shift+O 收起侧栏', collapsed === false);
 
+  console.log('\n[4.1] 侧栏按钮与拖拽调宽');
+  const btnToggle = await page.evaluate(() => {
+    const btn = document.getElementById('mf-outline-btn');
+    const before = document.body.classList.contains('mf-outline-open');
+    btn.click();
+    const opened = document.body.classList.contains('mf-outline-open');
+    const pressed = btn.getAttribute('aria-pressed');
+    btn.click();
+    return { before, opened, pressed, closed: document.body.classList.contains('mf-outline-open') };
+  });
+  check('状态栏「大纲」按钮可以展开侧栏', btnToggle.before === false && btnToggle.opened === true, JSON.stringify(btnToggle));
+  check('按钮状态跟随展开状态', btnToggle.pressed === 'true', JSON.stringify(btnToggle));
+  check('再点一次收起', btnToggle.closed === false);
+
+  const resized = await page.evaluate(async () => {
+    document.getElementById('mf-outline-btn').click();
+    await new Promise(r => setTimeout(r, 60));
+    const r = document.querySelector('.mf-outline-resizer');
+    const rect = r.getBoundingClientRect();
+    const widthOf = () => Math.round(document.getElementById('mf-outline').getBoundingClientRect().width);
+
+    r.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, pointerId: 1, clientX: rect.left + 2, clientY: rect.top + 40
+    }));
+    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 320 }));
+    await new Promise(res => setTimeout(res, 40));
+    const during = widthOf();
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+    await new Promise(res => setTimeout(res, 40));
+
+    const saved = localStorage.getItem('mf.outline.width');
+    const margin = getComputedStyle(document.getElementById('scroll')).marginLeft;
+
+    r.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await new Promise(res => setTimeout(res, 40));
+
+    return { during, saved, margin, reset: widthOf() };
+  });
+  check('拖拽能改变侧栏宽度', resized.during === 320, JSON.stringify(resized));
+  check('正文左边距跟着一起动', resized.margin === '320px', resized.margin);
+  check('宽度写入 localStorage', resized.saved === '320', resized.saved);
+  check('双击复位到 240', resized.reset === 240, resized.reset);
+
   // ---------------------------------------------------------------- 主题
   console.log('\n[5] 主题');
   const themes = await page.evaluate(() => {

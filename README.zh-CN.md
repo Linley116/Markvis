@@ -34,7 +34,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 6,770 行：Swift 1,410 行、Web 内核 3,860 行、功能模块 500 行、测试 980 行。
+整个编辑器约 6,940 行：Swift 1,440 行、Web 内核 3,760 行、功能模块 600 行、测试 1,130 行。
 
 ### 功能
 
@@ -49,7 +49,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；打开新文件不会顶掉当前文档 |
 | **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、按 CJK 宽度算列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
-| **大纲** | `Cmd+Shift+O`，标题树 + 当前节高亮 |
+| **大纲** | `Cmd+Shift+O` 或状态栏「大纲」按钮；拖右边缘可调宽（双击复位、宽度记忆） |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，`Cmd+Shift+L` |
 | **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，点一下弹出源码浮层直接改 |
@@ -149,7 +149,7 @@ cd markframe
 
 ```bash
 NODE_PATH=./node_modules node test/engine.test.js      # 83 项 —— 核心闭环
-NODE_PATH=./node_modules node test/features.test.js    # 40 项 —— 功能
+NODE_PATH=./node_modules node test/features.test.js    # 47 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
 ```
