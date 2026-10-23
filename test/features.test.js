@@ -148,22 +148,54 @@ const TABLE_MD = [
   const collapsed = await page.evaluate(() => document.body.classList.contains('mf-outline-open'));
   check('Cmd+Shift+O 收起侧栏', collapsed === false);
 
-  console.log('\n[4.1] 侧栏按钮与拖拽调宽');
-  const btnToggle = await page.evaluate(() => {
+  console.log('\n[4.1] 左上角大纲开关与拖拽调宽');
+  const fab = await page.evaluate(() => {
     const btn = document.getElementById('mf-outline-btn');
-    const before = document.body.classList.contains('mf-outline-open');
-    btn.click();
-    const opened = document.body.classList.contains('mf-outline-open');
-    const pressed = btn.getAttribute('aria-pressed');
-    btn.click();
-    return { before, opened, pressed, closed: document.body.classList.contains('mf-outline-open') };
+    const rect = () => {
+      const r = btn.getBoundingClientRect();
+      return [Math.round(r.left), Math.round(r.top), Math.round(r.width)];
+    };
+    const state = () => ({
+      open: document.body.classList.contains('mf-outline-open'),
+      pressed: btn.getAttribute('aria-pressed'),
+      title: btn.title,
+      rect: rect(),
+      visible: rect()[2] > 0 && getComputedStyle(btn).display !== 'none'
+    });
+
+    const closedAtStart = state();   // 上一步 Cmd+Shift+O 已收起
+    btn.click();                     // 左上角点一下：展开
+    const opened = state();
+    btn.click();                     // 再点：收起
+    const closedAgain = state();
+    btn.click();                     // 还在原位：重新展开
+    const reopened = state();
+
+    return {
+      closedAtStart, opened, closedAgain, reopened,
+      position: getComputedStyle(btn).position,
+      hasHeaderClose: !!document.querySelector('#mf-outline-close')
+    };
   });
-  check('状态栏「大纲」按钮可以展开侧栏', btnToggle.before === false && btnToggle.opened === true, JSON.stringify(btnToggle));
-  check('按钮状态跟随展开状态', btnToggle.pressed === 'true', JSON.stringify(btnToggle));
-  check('再点一次收起', btnToggle.closed === false);
+  check('大纲开关固定在左上角',
+        fab.position === 'fixed' && fab.closedAtStart.rect[0] < 40 && fab.closedAtStart.rect[1] < 40,
+        JSON.stringify(fab.closedAtStart.rect));
+  check('收起状态下按钮仍然可见', fab.closedAtStart.visible === true && fab.closedAtStart.open === false,
+        JSON.stringify(fab.closedAtStart));
+  check('点按钮展开侧栏', fab.opened.open === true && fab.opened.pressed === 'true', JSON.stringify(fab.opened));
+  check('再点一次收起，按钮位置不变',
+        fab.closedAgain.open === false && fab.closedAgain.pressed === 'false' &&
+        fab.closedAgain.rect.join() === fab.closedAtStart.rect.join(),
+        JSON.stringify(fab.closedAgain));
+  check('收起后提示文案变为「显示大纲」', /显示大纲/.test(fab.closedAgain.title), fab.closedAgain.title);
+  check('同一位置再点可以重新展开', fab.reopened.open === true && fab.reopened.pressed === 'true',
+        JSON.stringify(fab.reopened));
+  check('侧栏页眉不再有自己的收起按钮', fab.hasHeaderClose === false);
 
   const resized = await page.evaluate(async () => {
-    document.getElementById('mf-outline-btn').click();
+    if (!document.body.classList.contains('mf-outline-open')) {
+      document.getElementById('mf-outline-btn').click();
+    }
     await new Promise(r => setTimeout(r, 60));
     const r = document.querySelector('.mf-outline-resizer');
     const rect = r.getBoundingClientRect();

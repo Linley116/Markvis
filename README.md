@@ -48,7 +48,7 @@ The whole editor is ~6,940 lines: 1,440 Swift, 3,760 web core, 600 features, 1,1
 | **Multi-document** | One document per window, native macOS tab groups (`Cmd+T`), opening a file never clobbers the current one |
 | **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-aware column widths |
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
-| **Outline** | `Cmd+Shift+O` or the “大纲” chip in the status bar; drag its right edge to resize (double-click resets, width is remembered) |
+| **Outline** | `Cmd+Shift+O` or the button pinned to the window’s top-left corner — it stays in place after collapsing, so the same click reopens it; drag its right edge to resize (double-click resets, width is remembered) |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
 | **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |

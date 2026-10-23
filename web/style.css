@@ -588,7 +588,44 @@ body.mf-resizing #scroll { transition: none; }
   opacity: .55;
 }
 
-#mf-outline-btn.mf-on {
+/* ---------- 左上角大纲开关 ----------
+   常驻在窗口左上角：侧栏展开时压在侧栏页眉上，收起后停在原处浮在正文上，
+   所以「收起」和「再展开」是同一个按钮、同一个位置。 */
+
+#mf-outline-btn {
+  position: fixed;
+  left: 10px;
+  top: 10px;
+  z-index: 40;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .12s, background .12s, border-color .12s, opacity .12s;
+}
+
+#mf-outline-btn svg { display: block; }
+
+#mf-outline-btn .mf-fab-fill { opacity: 0; transition: opacity .12s; }
+body.mf-outline-open #mf-outline-btn .mf-fab-fill { opacity: .22; }
+body.mf-outline-open #mf-outline-btn:hover { background: var(--code-bg); color: var(--fg); }
+
+/* 收起后浮在正文上：补一点底色，不然白底上看不见 */
+body:not(.mf-outline-open) #mf-outline-btn {
+  background: var(--code-bg);
+  border-color: var(--border);
+  opacity: .8;
+}
+
+body:not(.mf-outline-open) #mf-outline-btn:hover {
+  opacity: 1;
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -597,26 +634,14 @@ body.mf-resizing #scroll { transition: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 8px;
+  /* 左边留出 46px 给左上角的常驻开关，标题不会被压住 */
+  padding: 12px 14px 8px 46px;
   font-size: 11px;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--muted);
   user-select: none;
 }
-
-.mf-outline-head button {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-
-.mf-outline-head button:hover { background: var(--code-bg); color: var(--fg); }
 
 #mf-outline-list {
   flex: 1;
@@ -757,6 +782,7 @@ body.mf-focus #write > .md-block.mf-focus-current {
 
 body.mf-export #status,
 body.mf-export #mf-outline,
+body.mf-export #mf-outline-btn,
 body.mf-export #mf-search {
   display: none !important;
 }
@@ -841,7 +867,7 @@ body.mf-export h3 { font-size: 1.2em; }
     overflow: visible !important;
   }
 
-  #status, #mf-outline, #mf-search { display: none !important; }
+  #status, #mf-outline, #mf-outline-btn, #mf-search { display: none !important; }
   body.mf-outline-open #scroll { margin-left: 0 !important; }
   #scroll { height: auto !important; overflow: visible !important; }
   #write { max-width: none !important; padding: 0 !important; }

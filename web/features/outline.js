@@ -7,7 +7,7 @@
   var write = MF.write;
   var scroll = document.getElementById('scroll');
 
-  var aside, listEl, toggleBtn, resizer, statusBtn;
+  var aside, listEl, resizer, fab;
   var timer = null;
   var activeId = null;
 
@@ -19,7 +19,6 @@
     aside.innerHTML =
       '<div class="mf-outline-head">' +
         '<span class="mf-outline-title">大纲</span>' +
-        '<button id="mf-outline-close" title="隐藏大纲 (Cmd+Shift+O)">«</button>' +
       '</div>' +
       '<nav id="mf-outline-list"></nav>' +
       '<div class="mf-outline-resizer" title="拖动调整宽度，双击复位"></div>';
@@ -28,10 +27,6 @@
     listEl = aside.querySelector('#mf-outline-list');
     resizer = aside.querySelector('.mf-outline-resizer');
     wireResizer();
-
-    aside.querySelector('#mf-outline-close').addEventListener('click', function () {
-      setOpen(false);
-    });
   }
 
   /** 侧栏宽度走 CSS 变量：侧栏本身和正文的左外边距都读它 */
@@ -82,10 +77,12 @@
     });
   }
 
+  /** 左上角按钮：位置固定不动，只翻转 aria 状态和提示文案 */
   function syncButton(open) {
-    if (!statusBtn) return;
-    statusBtn.classList.toggle('mf-on', open);
-    statusBtn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    if (!fab) return;
+    fab.setAttribute('aria-pressed', open ? 'true' : 'false');
+    fab.setAttribute('aria-label', open ? '隐藏大纲' : '显示大纲');
+    fab.title = open ? '隐藏大纲 (Cmd+Shift+O)' : '显示大纲 (Cmd+Shift+O)';
   }
 
   function buildList() {
@@ -183,10 +180,10 @@
   build();
   loadWidth();
 
-  // 状态栏按钮：不想记快捷键也能开关
-  statusBtn = document.getElementById('mf-outline-btn');
-  if (statusBtn) {
-    statusBtn.addEventListener('click', function () { toggle(); });
+  // 左上角常驻按钮：不想记快捷键也能开关；收起后它还在原地，点一下就能展开
+  fab = document.getElementById('mf-outline-btn');
+  if (fab) {
+    fab.addEventListener('click', function () { toggle(); });
   }
 
   var saved = null;
