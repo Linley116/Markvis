@@ -33,7 +33,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~6,570 lines: 1,410 Swift, 3,700 web core, 500 features, 970 tests.
+The whole editor is ~6,770 lines: 1,410 Swift, 3,860 web core, 500 features, 980 tests.
 
 ### Features
 
@@ -51,7 +51,7 @@ The whole editor is ~6,570 lines: 1,410 Swift, 3,700 web core, 500 features, 970
 | **Outline** | `Cmd+Shift+O`, heading tree with current-section tracking |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
-| **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, never on the startup path |
+| **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |
 | **Footnotes / TOC** | `[^id]` references with click-through to `[^id]: ...` definitions, `[TOC]` rebuilt from the current headings |
 | **Spelling** | System spellcheck while typing (`Cmd+;` to toggle) |
 | **Files** | Double-click `.md`, drag to window, Open Recent, CLI argument, autosave, close confirmation, crash recovery for untitled documents |
@@ -105,7 +105,7 @@ Four things that silently broke and are now pinned by tests:
 
 - `document.styleSheets[].cssRules` throws `SecurityError` for `file://` in WKWebView → export HTML had almost no CSS. Fixed by injecting `style.css` from the app bundle.
 - Code blocks wrapped in the export page but were measured unwrapped → the last two lines got clipped.
-- `PDFPage` holds its `PDFDocument` weakly → merged pages occasionally came out blank.
+- `PDFPage` holds its `PDFDocument` weakly → merged pages occasionally came out blank. Captured pages are now stored as their `PDFDocument` so the page never outlives its owner.
 - A snapshot-and-slice approach (the first implementation) cannot avoid overlap at page boundaries. It was removed entirely.
 
 ### Build
@@ -147,7 +147,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 75 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 80 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content

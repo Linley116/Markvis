@@ -1,7 +1,7 @@
 # MarkFrame 后续工作清单
 
-> 当前基线：**v0.8**，6,571 行（engine 2,880 / css 790 / features 521 / Swift 1,409 / tests 971），
-> 115 项断言全绿 + PDF 内容回归 + 崩溃恢复冒烟。已开源：<https://github.com/Linley116/markframe>
+> 当前基线：**v0.8.1**，6,769 行（engine 2,977 / css 880 / features 521 / Swift 1,410 / tests 981），
+> 120 项断言全绿 + PDF 内容回归 + 崩溃恢复冒烟。已开源：<https://github.com/Linley116/markframe>
 >
 > 规模标记：**S** < 200 行，**M** 200–600 行，**L** 需要改架构。
 
@@ -30,15 +30,18 @@
 | 5 | **F7b 定义式链接** | ✅ `[text][id]` + `[id]: url "title"`，URL 可编辑，序列化保留引用形式 |
 | 6 | **F5 KaTeX 数学** | ✅ 行内 `$x$` / 块级 `$$…$$`，懒加载（640KB 含字体），PDF 拷字体、HTML 导出内联 base64 |
 | 6 | **F6 Mermaid** | ✅ ```` ```mermaid ```` 渲染成 SVG，懒加载 2.5MB，语法错误回退显示源码 |
+| 6 | **F5b 公式源码框** | ✅ 点公式/图表弹出浮层改源码（Cmd+Enter 应用、Esc 取消） |
+| 6 | **PDF 弱引用修复** | ✅ 导出改存 `PDFDocument` 而不是 `PDFPage`，`Drawing a PDFPage when its PDFDocument is nil` 告警消失 |
 
-### 剩余待办（14 项）
+### 剩余待办（13 项）
 
 | 分区 | 待办 | 数量 |
 |---|---|---|
 | 技术债 | `T3` `T4` | 2 |
 | 本轮新增债 | `T8` `T10` | 2 |
 | P1 | `F9` `F10` | 2 |
-| P2 | `F11`–`F18` | 8 |
+| P2 | `F11`–`F18` | 7 |
+
 
 > 已完成的工作在正文里用**删除线**标出（保留原文便于回溯）；未划掉的就是待办。
 >
@@ -81,6 +84,7 @@
 > 包体从 584KB 涨到 **3.6MB**（Mermaid 2.5MB + KaTeX 640KB 含 20 个 woff2）。
 > 两个库都不在启动路径上：只有文档里真出现 `$…$` / ```` ```mermaid ```` 才注入。
 > PDF 走「打印壳目录里拷一份 fonts/」，HTML 导出把字体 base64 内联（单文件可移植）。
+> 公式与图表都不是死块：点一下弹源码浮层（`#mf-math-editor`），改完写回 data-src 并重新水合。
 
 **迭代 7｜结构与基础设施**
 `T3 撤销栈` → `T4 嵌套块` → `F9 文件树` → `F15 增量落盘`
@@ -189,12 +193,14 @@
 
 ~~行内 `$x$` + 块级 `$$…$$`，渲染成 `contenteditable=false` 原子（`data-src` 存源码、`data-tex` 存 TeX），
 光标按 `data-src` 长度计偏移。KaTeX 0.16.11 懒加载，`output:'html'` 不带 MathML。
-公式本体在实时模式不可直接编辑（走源码模式），「点公式弹源码框」留给 F5b。~~
+
+第 6 轮补充（F5b）：点公式/图表弹出源码浮层，应用后改写 data-tex/data-src（mermaid 改 data-code）、
+删掉 data-rendered 触发重新渲染，再 markDirty 让画笔把改动落到 Markdown。~~
 
 ### ~~F6 Mermaid 图表~~（M）✅ 第 6 轮完成
 
 ~~```mermaid 围栏渲染成 SVG 块（实际 2.5MB，比预估大），懒加载 + `securityLevel:'strict'`，
-语法错误时回退成源码 `<pre>`，不阻塞编辑。图表块同样不可直接编辑，源码模式下改。~~
+语法错误时回退成源码 `<pre>`，不阻塞编辑。图表和公式共用同一个源码浮层编辑。~~
 
 ### ~~F7 脚注 / TOC~~（M）✅ 第 5 轮完成（脚注 + 目录），定义链接拆出 F7b
 
@@ -231,7 +237,7 @@ tab group（`tabbingMode = .preferred` + `addTabbedWindow`），Window 菜单由
 | 项 | 说明 | 规模 |
 |---|---|---|
 | F11 快速打开 | `Cmd+P` 模糊搜文件名，需要文件索引（Typora 用 Web Worker + 自带 ripgrep） | L |
-| F12 拼写检查 | `WKWebView` 自带 `spellcheck`，接系统词典 + 右键建议 | S |
+| ~~F12 拼写检查~~ | ✅ 第 5 轮完成：`spellcheck` + `Cmd+;` 开关，系统词典 | ~~S~~ |
 | F13 HTML 块 | 内联编辑 + `iframe` 沙箱（Typora 用 `srcdoc` + 独立 partition） | M |
 | F14 表情/语言补全 | 输入 `:` 补 emoji、围栏语言名补全 | S |
 | F15 增量落盘 | 复刻 `document.syncChangeIfNeeded` 命令流协议，取代全量保存 | M |

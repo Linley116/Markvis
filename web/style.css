@@ -441,6 +441,66 @@ a:hover { text-decoration: underline; }
   white-space: pre-wrap;
 }
 
+/* ---------- 公式源码编辑浮层 ---------- */
+
+#mf-math-editor {
+  position: fixed;
+  z-index: 60;
+  display: none;
+  width: 320px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.18);
+}
+
+#mf-math-editor.mf-show { display: block; }
+
+#mf-math-input {
+  width: 100%;
+  height: 96px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  background: var(--code-bg);
+  color: var(--fg);
+  outline: none;
+}
+
+#mf-math-input:focus { border-color: var(--accent); }
+
+.mf-me-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mf-me-hint {
+  flex: 1;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mf-me-row button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mf-me-row button:hover { border-color: var(--accent); color: var(--accent); }
+
+.md-math, .md-math-block, .md-mermaid { cursor: pointer; }
+
 /* ---------- 状态栏 ---------- */
 
 #status {

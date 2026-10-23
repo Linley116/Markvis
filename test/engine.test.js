@@ -517,6 +517,44 @@ function check(name, cond, extra) {
   check('往返保留块级公式', /\$\$\n\\int_0\^1 x\^2 \\, dx = \\frac\{1\}\{3\}\n\$\$/.test(mathMmd.md), JSON.stringify(mathMmd.md));
   check('往返保留 mermaid 围栏', /```mermaid\ngraph TD\n  A\[开始\] --> B\[结束\]\n```/.test(mathMmd.md), JSON.stringify(mathMmd.md));
 
+  console.log('\n[7.12] 点公式编辑源码（F5b）');
+  const mathEdit = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '值 $x^2$ 结束', 't');
+    for (let i = 0; i < 40; i++) {
+      await wait(150);
+      const n = document.querySelector('[mdtype="math_inline"]');
+      if (n && n.querySelector('.katex')) break;
+    }
+    const node = document.querySelector('[mdtype="math_inline"]');
+    node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await wait(80);
+
+    const panel = document.getElementById('mf-math-editor');
+    const field = document.getElementById('mf-math-input');
+    const opened = panel.classList.contains('mf-show');
+    const prefilled = field.value;
+
+    field.value = 'x^3';
+    document.getElementById('mf-me-apply').click();
+    await wait(500);
+
+    const after = document.querySelector('[mdtype="math_inline"]');
+    return {
+      opened,
+      prefilled,
+      hidden: !panel.classList.contains('mf-show'),
+      tex: after && after.getAttribute('data-tex'),
+      rendered: !!(after && after.querySelector('.katex')),
+      md: window.__getMarkdown()
+    };
+  });
+  check('点击公式弹出源码框', mathEdit.opened === true);
+  check('源码框带出原 TeX', mathEdit.prefilled === 'x^2', mathEdit.prefilled);
+  check('应用后面板收起', mathEdit.hidden === true);
+  check('应用后 Markdown 更新', mathEdit.md === '值 $x^3$ 结束', JSON.stringify(mathEdit.md));
+  check('应用后重新渲染', mathEdit.rendered === true && mathEdit.tex === 'x^3', JSON.stringify(mathEdit));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

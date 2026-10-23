@@ -716,7 +716,7 @@ final class EditorWindowController: NSWindowController {
     private var exportWindow: NSWindow?
     private var exportWebView: WKWebView?
     private var exportPages: [String] = []
-    private var exportRendered: [PDFPage] = []
+    private var exportRendered: [PDFDocument] = []
     private var exportDocs: [PDFDocument] = []
     private var exportDest: URL?
     private var exportGeometry = CGSize(width: 794, height: 1123)
@@ -826,15 +826,14 @@ final class EditorWindowController: NSWindowController {
                 let cfg = WKPDFConfiguration()
                 cfg.rect = CGRect(origin: .zero, size: self.exportGeometry)
                 web.createPDF(configuration: cfg) { result in
-                    var captured: PDFPage?
-                    if case .success(let data) = result,
-                       let doc = PDFDocument(data: data),
-                       let page = doc.page(at: 0) {
-                        captured = page
+                    var capturedDoc: PDFDocument?
+                    if case .success(let data) = result, let doc = PDFDocument(data: data),
+                       doc.page(at: 0) != nil {
+                        capturedDoc = doc
                     }
 
                     // 空页重试：刚建立的导出视图偶尔会抓到未绘制的首帧
-                    let empty = (captured?.string ?? "").isEmpty
+                    let empty = (capturedDoc?.page(at: 0)?.string ?? "").isEmpty
                     if empty && expectText && attempt < 2 {
                         mfLog("page \(index) empty, retry \(attempt + 1)")
                         DispatchQueue.main.async {
@@ -843,7 +842,7 @@ final class EditorWindowController: NSWindowController {
                         return
                     }
 
-                    if let page = captured { self.exportRendered.append(page) }
+                    if let doc = capturedDoc { self.exportRendered.append(doc) }
                     else { mfLog("page \(index) capture failed") }
 
                     DispatchQueue.main.async { self.renderPage(index + 1, shell: shell) }
@@ -872,7 +871,8 @@ final class EditorWindowController: NSWindowController {
         var box = CGRect(origin: .zero, size: a4)
         guard let ctx = CGContext(consumer: consumer, mediaBox: &box, nil) else { return }
 
-        for page in exportRendered {
+        for doc in exportRendered {
+            guard let page = doc.page(at: 0) else { continue }
             ctx.beginPDFPage(nil)
             let r = page.bounds(for: .mediaBox)
             ctx.saveGState()

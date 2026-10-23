@@ -955,6 +955,99 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // 公式 / 图表的源码编辑：点一下浮出一个小面板（对应 Typora 点公式弹源码框）
+  // ---------------------------------------------------------------------
+
+  var mathEditing = null;   // { node, kind }
+
+  function closestTyped(node, types) {
+    while (node && node !== write) {
+      if (node.nodeType === 1 && node.hasAttribute && node.hasAttribute('mdtype')) {
+        var t = node.getAttribute('mdtype');
+        for (var i = 0; i < types.length; i++) if (types[i] === t) return node;
+        return null;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  function openMathEditor(node) {
+    var panel = document.getElementById('mf-math-editor');
+    var field = document.getElementById('mf-math-input');
+    if (!panel || !field) return;
+
+    var kind = node.getAttribute('mdtype');
+    mathEditing = { node: node, kind: kind };
+    field.value = kind === 'mermaid'
+      ? (node.getAttribute('data-code') || '')
+      : (node.getAttribute('data-tex') || '');
+
+    panel.classList.add('mf-show');
+    var r = node.getBoundingClientRect();
+    var w = 340, h = 190;
+    panel.style.left = Math.max(12, Math.min(window.innerWidth - w, r.left)) + 'px';
+    panel.style.top = Math.max(12, Math.min(window.innerHeight - h, r.bottom + 8)) + 'px';
+    field.focus();
+    field.select();
+  }
+
+  function closeMathEditor() {
+    var panel = document.getElementById('mf-math-editor');
+    if (panel) panel.classList.remove('mf-show');
+    mathEditing = null;
+  }
+
+  function applyMathEditor() {
+    if (!mathEditing) return;
+    var node = mathEditing.node;
+    var kind = mathEditing.kind;
+    var field = document.getElementById('mf-math-input');
+    var val = field ? field.value : '';
+
+    if (kind === 'math_inline') {
+      node.setAttribute('data-tex', val);
+      node.setAttribute('data-src', '$' + val + '$');
+    } else if (kind === 'math_block') {
+      node.setAttribute('data-tex', val);
+      node.setAttribute('data-src', '$$\n' + val + '\n$$');
+    } else {
+      node.setAttribute('data-code', val);
+      node.setAttribute('data-src', '```mermaid\n' + val + '\n```');
+    }
+    node.removeAttribute('data-rendered');
+
+    closeMathEditor();
+    hydrateMath();
+    hydrateMermaid();
+
+    var top = topBlockOf(node) || node;
+    markDirty(top);
+    setEdited(true);
+  }
+
+  (function wireMathEditor() {
+    var panel = document.getElementById('mf-math-editor');
+    var field = document.getElementById('mf-math-input');
+    if (!panel || !field) return;
+
+    document.getElementById('mf-me-apply').addEventListener('click', applyMathEditor);
+    document.getElementById('mf-me-cancel').addEventListener('click', closeMathEditor);
+
+    field.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); closeMathEditor(); return; }
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); applyMathEditor(); }
+    });
+
+    // 点面板外面收起（点另一个公式时由 #write 的 click 重新打开）
+    document.addEventListener('mousedown', function (e) {
+      if (!panel.classList.contains('mf-show')) return;
+      if (panel.contains(e.target)) return;
+      closeMathEditor();
+    });
+  })();
+
   function renderDoc() {
     write.innerHTML = doc.map(renderBlock).join('');
     padEmpties();
@@ -1618,6 +1711,13 @@
     var t = e.target;
     while (t && t.nodeType !== 1 && t !== write) t = t.parentNode;
     if (!t || t === write) return;
+
+    var typed = closestTyped(t, ['math_inline', 'math_block', 'mermaid']);
+    if (typed) {
+      e.preventDefault();
+      openMathEditor(typed);
+      return;
+    }
 
     if (t.classList && t.classList.contains('md-fn-ref')) {
       e.preventDefault();

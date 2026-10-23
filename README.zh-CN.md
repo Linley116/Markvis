@@ -34,7 +34,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 6,570 行：Swift 1,410 行、Web 内核 3,700 行、功能模块 500 行、测试 970 行。
+整个编辑器约 6,770 行：Swift 1,410 行、Web 内核 3,860 行、功能模块 500 行、测试 980 行。
 
 ### 功能
 
@@ -52,7 +52,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | **大纲** | `Cmd+Shift+O`，标题树 + 当前节高亮 |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，`Cmd+Shift+L` |
-| **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，不在启动路径上 |
+| **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，点一下弹出源码浮层直接改 |
 | **脚注 / 目录** | `[^id]` 引用 + `[^id]: ...` 定义（点击互相跳转），`[TOC]` 按当前标题自动重建 |
 | **拼写检查** | 输入时用系统词典检查（`Cmd+;` 切换） |
 | **文件** | 双击 `.md`、拖拽打开、最近打开、命令行参数、自动保存、关窗确认、未命名文档崩溃恢复 |
@@ -106,7 +106,7 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 
 - WKWebView 里 `file://` 样式表的 `cssRules` 会抛 `SecurityError` → 导出 HTML 几乎没有样式。改为从 app bundle 注入 `style.css`。
 - 代码块在导出页折行、测量时却不折行 → 页尾两行被裁掉。
-- `PDFPage` 对 `PDFDocument` 是弱引用 → 合并时偶尔出现空页。
+- `PDFPage` 对 `PDFDocument` 是弱引用 → 合并时偶尔出现空页。现在改为保存 `PDFDocument` 本身，页面不再比它的宿主活得久。
 - 最初的「整页快照 + 坐标切片」方案在页边界必然重叠，已整体删除。
 
 ### 构建
@@ -148,7 +148,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 75 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 80 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 40 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
