@@ -1,7 +1,7 @@
 # MarkFrame 路线图
 
-> **基线 v0.10.6** · 9,842 行（engine 3,494 / html2md 311 / css 1,247 / features 1,547 / Swift 1,872 / tests 1,904）
-> **210 项断言全绿**（引擎 113 + 功能 97）+ PDF 内容回归 + 崩溃恢复 / 主题 / 文件树自检 · 包体 3.7 MB
+> **基线 v0.10.7** · 10,199 行（engine 3,497 / html2md 311 / css 1,300 / features 1,829 / Swift 2,093 / tests 2,278）
+> **219 项断言全绿**（引擎 113 + 功能 106）+ 原生文件操作自检 + PDF 内容回归 · 包体 3.8 MB
 > 仓库：<https://github.com/Linley116/markframe>
 
 图例：✅ 已完成 · 🚧 进行中 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -44,8 +44,10 @@
 
 | 编号 | 功能 | 说明 | 优先级 | 规模 |
 |---|---|---|---|---|
-| **F9b** | 文件树补 Typora 细节 | v0.10.4 已对齐主体，还差：拖拽移动文件/文件夹（含与访达互拖）、排序切换（名称/修改时间 + 文件夹优先开关）、Duplicate、在新窗口打开、撤销文件操作、Recent Locations / 固定文件夹 | P1 | M |
+| **F9b** | 文件树补 Typora 细节 | ~~v0.10.4 已对齐主体，还差：拖拽移动文件/文件夹（含与访达互拖）、排序切换（名称/修改时间 + 文件夹优先开关）、Duplicate、在新窗口打开、撤销文件操作、Recent Locations / 固定文件夹~~ **v0.10.7 已完成**（除「与访达互拖」拆到 `F9c`） | ~~P1~~ | ~~M~~ |
 | **F11** | 快速打开 | `Cmd+P` 模糊搜文件名，需要文件索引（Typora 用 Web Worker + 自带 ripgrep） | 发布线 | L |
+| **F9c** | 文件树与访达互拖 | v0.10.7 只做了树内拖拽；从访达拖文件进侧栏、拖出侧栏到访达还没做 | P2 | M |
+| **F9d** | 撤销删除 / 移动冲突处理 | 删除进废纸篓不可撤销（和 Typora 一致）；同名目标现在直接拒绝，可考虑改名落地 | P2 | S |
 | **F13** | HTML 块 | 内联编辑 + `iframe` 沙箱（Typora 用 `srcdoc` + 独立 partition） | P2 | M |
 | **F14** | emoji / 语言名补全 | 输入 `:` 补 emoji；围栏语言名补全 | 随时 | S |
 | **F15** | 增量落盘 | 复刻 `document.syncChangeIfNeeded` 的命令流协议，取代全量保存 | P2 | M |
@@ -80,6 +82,7 @@
 | v0.10.4 | 文件树放在右侧，和 Typora 的左侧边栏对不上；根目录被手动选择粘住，打开别的目录的文件不跟过去；当前打开的文件在树里没有标记；访达里改了文件树不刷新；不支持类型的文件也列出来 | 按 Typora 的 Files Sidebar 重做：①合并成**左侧统一侧栏**，顶部「大纲 / 文件」图标 tab 切换（新增 `features/sidebar.js` 管外壳/宽度/开关，右上角按钮删除），`Cmd+Shift+O` 开关侧栏、`Cmd+Shift+E` 直接开到文件 tab；②**根目录跟随当前文档**——打开一个文件，它的父文件夹就是树的根（Typora 的 "parent folder will be automatically loaded"），手动「打开文件夹…」同理，以最近一次动作为准；③**当前文件高亮**并自动展开祖先目录滚动到可见；④**只显示 Typora 支持的类型**（md/markdown/mdown/mkdn/mkd/txt，目录永远显示）；⑤原生 **FSEvents 监听根目录子树**，外部增删改名防抖后自动刷新（行内编辑中不冲掉输入框）；⑥侧栏底部加当前文件夹操作条（打开文件夹… / 刷新），右键菜单加「复制路径」；⑦「显示/隐藏大纲」菜单改「显示/隐藏侧栏」并新增「显示文件树」 |
 | v0.10.5 | `Cmd+/` 切源码模式直接跳到文档最后 | 两个方向都保持位置：**实时→源码**时光标在可视区就跟着光标走（Typora 行为，`caretSourceOffset` + 块偏移表算绝对偏移），光标被滚出可视区就跟着视图顶部所在的块；**源码→实时**时光标在 textarea 可视区就跟着光标，用滚轮读到别处就跟着 textarea 滚动比例——把对应块滚到视图顶部并落光标，顺带修掉 `write.focus()` 把视图拽回开头的次生问题。**根因**：`source.value = 整篇` 会把光标送到末尾，`focus()` 再把内部滚动的 textarea 滚到底 |
 | v0.10.6 | 从浏览器/Word 复制内容粘进来，格式全丢（只吞纯文本） | 自写 `web/html2md.js`（311 行，不引 turndown）：DOMParser 走 DOM 树转 Markdown，覆盖标题/段落/加粗斜体删除线/行内代码/链接/图片/嵌套列表/任务清单/嵌套引用/带语言代码块/表格（含对齐）/分隔线/硬换行；script/style/表单控件整棵跳过。引擎粘贴处理改为：图片仍走原生存盘 → 剪贴板有**块级结构**的富文本就转换后按块插入（多块内容走 `reparseInto` 拆块重解析，光标落到粘贴末尾，可撤销）→ 没有富文本或是代码编辑器的高亮 HTML（全是 span，`isRich` 识别）就按纯文本插。表格单元格里按单行文本插。源码模式粘贴同样转换。新增 15 项断言（含真实页面结构 fixture 的转换 + 往返） |
+| v0.10.7 | 文件树只做了 Typora 文件侧栏的主体，细节（排序、复制、新窗口、拖拽移动、最近文件夹）都还没有 | **F9b**：①**排序切换**——底部「排序」菜单：按名称 / 按修改时间 + 文件夹优先开关，偏好写 localStorage，排序参数传给原生（`library.list` 新增 `sort` / `groupDirs`，原生带 `mtime` 一起返回）；②**Duplicate**——右键「复制」走 `library.duplicate`，重名自动 `name copy.md` / `name copy 2.md`；③**在新窗口打开**——`library.openInNewWindow` → AppDelegate 的 `openFileInNewWindow`（不复用空白窗口）；④**树内拖拽移动**——行可拖，拖到目录行移动、拖到空白回根目录，拒绝移进自己的子孙（环）和覆盖同名；拖到正文按 `caretPositionFromPoint` 落光标插相对链接（走 `MF.programEdit` 可撤销）；⑤**最近文件夹 / 固定**——底部「最近」菜单：固定段 + 最近段，每条可固定/移除/切根，可清除列表（原生记在 UserDefaults，`setRoot` / `chooseRoot` / 打开文档都会记）；⑥**撤销上一次文件操作**——`library.undoFileOp`，新建/复制→删除、重命名/移动→移回，删除进废纸篓不记入（与 Typora 一致）。原生 `create/rename/delete/duplicate/move/reveal` 都加了显式 `root` 参数，自检可以在测试目录里跑；自检新增 `MARKFRAME_TEST_LIBRARY_OPS` 真实跑一遍 create→duplicate×2→rename→move→(拒绝自嵌套)→undo，断言命名去重、循环拒绝、撤销还原；三种排序模式用错开时间戳的 fixture 验证。新增 9 项 JS 断言 |
 
 ---
 

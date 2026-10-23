@@ -909,6 +909,47 @@ body:not(.mf-sidebar-open) #mf-outline-btn:hover {
   background: var(--border);
 }
 
+/* 最近文件夹菜单：比普通菜单宽一点，一行是「名字 + 固定/移除」 */
+.mf-lib-menu-wide { min-width: 208px; }
+
+.mf-lib-menu-head {
+  padding: 4px 9px 3px;
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  user-select: none;
+}
+
+.mf-lib-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mf-lib-menu-row .mf-lib-menu-item { flex: 1; min-width: 0; }
+
+.mf-lib-menu-pin {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mf-lib-menu-pin:hover { background: var(--code-bg); color: var(--fg); }
+
+/* 拖拽落点：目录行被指向时高亮 */
+.mf-lib-row.mf-lib-dropping {
+  background: var(--code-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* 底部当前文件夹操作条（Typora 把文件夹操作放在侧栏底部） */
 .mf-lib-rootbar {
   display: flex;

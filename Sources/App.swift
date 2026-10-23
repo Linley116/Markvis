@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wc = EditorWindowController()
         wc.onOpenFile = { [weak self] path in self?.noteRecent(path) }
         wc.requestOpenFile = { [weak self] path in self?.openFile(at: path) }
+        wc.requestOpenInNewWindow = { [weak self] path in self?.openFileInNewWindow(at: path) }
         windowControllers.append(wc)
         wc.showWindow(nil)
         return wc
@@ -125,6 +126,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let wc = activeController ?? windowControllers.last, wc.isReusable {
             wc.load(path: path)
             noteRecent(path)
+            return
+        }
+        let wc = makeController()
+        wc.load(path: path)
+        noteRecent(path)
+    }
+
+    /// 文件树右键「在新窗口打开」：不复用空白窗口，直接新建一个
+    func openFileInNewWindow(at path: String) {
+        if windowControllers.isEmpty {
+            pendingOpen = path
             return
         }
         let wc = makeController()

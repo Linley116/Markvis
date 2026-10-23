@@ -107,6 +107,45 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                 if let json = jsonEncode(summary) {
                     try? json.write(toFile: marker, atomically: true, encoding: .utf8)
                 }
+
+                // F9b 自检：MARKFRAME_TEST_LIBRARY_OPS=<marker> 时在测试目录里
+                // 真跑一遍 create / duplicate / rename / move / undo，验证原生逻辑。
+                // root 全程显式传测试目录，不动用户的根目录偏好。
+                if let opsMarker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY_OPS"],
+                   !dir.isEmpty,
+                   let c = controller {
+                    let root = dir
+                    // 自检开始前的目录状态（按修改时间排）：用来验证 mtime 排序
+                    let startByTime = c.libraryList(path: root, root: root, sort: "mtime", groupDirs: false)
+                    let file = root + "/新建.md"
+                    var ops: [[String: Any]] = []
+                    ops.append(c.libraryCreate(in: root, name: "新建", kind: "file", root: root))
+                    ops.append(c.libraryDuplicate(path: file, root: root))
+                    ops.append(c.libraryDuplicate(path: file, root: root))   // 再复制一次 → copy 2
+                    ops.append(c.libraryRename(path: file, name: "改名.md", root: root))
+                    // 建一个嵌套目录，用来验证「不能移进自己的子孙」
+                    ops.append(c.libraryCreate(in: root + "/sub", name: "inner", kind: "dir", root: root))
+                    ops.append(c.libraryMove(path: root + "/改名.md", toDir: root + "/sub", root: root))
+                    // 把 sub 拖进 sub/inner —— 应当被拒
+                    ops.append(c.libraryMove(path: root + "/sub", toDir: root + "/sub/inner", root: root))
+                    ops.append(c.libraryUndoFileOp())                       // 撤销刚才那次 move
+                    let after = c.libraryList(path: root, root: root)
+                    let byTime = c.libraryList(path: root, root: root, sort: "mtime", groupDirs: true)
+                    let mixed = c.libraryList(path: root, root: root, sort: "name", groupDirs: false)
+
+                    let report: [String: Any] = [
+                        "ops": ops,
+                        "names": after.compactMap { $0["name"] as? String },
+                        "byTime": byTime.compactMap { $0["name"] as? String },
+                        "startByTime": startByTime.compactMap { $0["name"] as? String },
+                        "mtimes": after.compactMap { $0["mtime"] as? Double },
+                        "mixed": mixed.compactMap { $0["name"] as? String },
+                        "codeIns": (after.compactMap { $0["name"] as? String }).filter { $0.hasPrefix("改名") }
+                    ]
+                    if let json = jsonEncode(report) {
+                        try? json.write(toFile: opsMarker, atomically: true, encoding: .utf8)
+                    }
+                }
             }
             // 自定义主题自检：MARKFRAME_TEST_THEMES=<marker> 时把主题清单写成 JSON
             if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_THEMES"] {
@@ -127,7 +166,11 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
 
         case "library.list":
             let dict = data as? [String: Any] ?? [:]
-            respond(controller?.libraryList(path: dict["path"] as? String ?? ""))
+            respond(controller?.libraryList(
+                path: dict["path"] as? String ?? "",
+                root: (dict["root"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                sort: dict["sort"] as? String ?? "name",
+                groupDirs: dict["groupDirs"] as? Bool ?? true))
 
         case "library.root":
             respond(["root": controller?.effectiveLibraryRoot() ?? ""])
@@ -137,6 +180,7 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
             var isDir: ObjCBool = false
             if !p.isEmpty, FileManager.default.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue {
                 EditorWindowController.libraryRoot = p
+                EditorWindowController.noteLibraryRoot(p) // 记进「最近文件夹」
                 controller?.startLibraryWatch() // 换根了，监听跟着换
             }
             respond(["root": controller?.effectiveLibraryRoot() ?? ""])
@@ -144,6 +188,40 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
         case "library.chooseRoot":
             controller?.chooseLibraryRoot()
             respond(nil)
+
+        case "library.recents":
+            respond(EditorWindowController.libraryRecents())
+
+        case "library.pinRoot":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            respond(EditorWindowController.toggleLibraryPin(p))
+
+        case "library.removeRecent":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            EditorWindowController.removeLibraryRecent(p)
+            respond(nil)
+
+        case "library.clearRecents":
+            EditorWindowController.clearLibraryRecents()
+            respond(nil)
+
+        case "library.duplicate":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            respond(controller?.libraryDuplicate(path: p))
+
+        case "library.move":
+            let dict = data as? [String: Any] ?? [:]
+            respond(controller?.libraryMove(
+                path: dict["path"] as? String ?? "",
+                toDir: dict["toDir"] as? String ?? ""))
+
+        case "library.openInNewWindow":
+            let p = (data as? [String: Any])?["path"] as? String ?? ""
+            if !p.isEmpty { controller?.requestOpenInNewWindow?(p) }
+            respond(nil)
+
+        case "library.undoFileOp":
+            respond(controller?.libraryUndoFileOp())
 
         case "library.copyPath":
             let p = (data as? [String: Any])?["path"] as? String ?? ""
@@ -274,6 +352,9 @@ final class EditorWindowController: NSWindowController {
 
     /// 当前窗口不适合接这个文件时（已脏/已有文档），交给 AppDelegate 开新窗口
     var requestOpenFile: ((String) -> Void)?
+
+    /// 强制开新窗口打开（文件树右键「在新窗口打开」）
+    var requestOpenInNewWindow: ((String) -> Void)?
 
     /// 空白未命名且无修改：可以就地加载新文档，不必开新窗口
     var isReusable: Bool {
@@ -461,7 +542,8 @@ final class EditorWindowController: NSWindowController {
     /// Typora 的文件树只显示它支持的类型（Markdown / 文本），目录永远显示
     private static let librarySupportedExts: Set<String> = ["md", "markdown", "mdown", "mkdn", "mkd", "txt"]
 
-    func libraryList(path raw: String, root: String? = nil) -> [[String: Any]] {
+    func libraryList(path raw: String, root: String? = nil,
+                     sort: String = "name", groupDirs: Bool = true) -> [[String: Any]] {
         let root = root ?? effectiveLibraryRoot()
         let dir: URL
         if raw.isEmpty {
@@ -474,34 +556,61 @@ final class EditorWindowController: NSWindowController {
 
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return [] }
+            at: dir, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey]) else { return [] }
 
         var out: [[String: Any]] = []
         for url in items where !url.lastPathComponent.hasPrefix(".") {
-            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+            let isDir = values?.isDirectory ?? false
             // 文件按 Typora 的类型过滤；目录一律保留（不然什么都展不开）
             if !isDir && !Self.librarySupportedExts.contains(url.pathExtension.lowercased()) {
                 continue
             }
+            let mtime = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
             out.append([
                 "name": url.lastPathComponent,
                 "path": url.path,
                 "dir": isDir,
-                "ext": url.pathExtension.lowercased()
+                "ext": url.pathExtension.lowercased(),
+                "mtime": mtime
             ])
         }
-        return out.sorted { a, b in
-            let ad = a["dir"] as? Bool ?? false
-            let bd = b["dir"] as? Bool ?? false
-            if ad != bd { return ad }
-            let an = a["name"] as? String ?? ""
-            let bn = b["name"] as? String ?? ""
-            return an.localizedStandardCompare(bn) == .orderedAscending
-        }
+        return Self.sortEntries(out, sort: sort, groupDirs: groupDirs)
     }
 
-    func libraryCreate(in rawDir: String, name: String, kind: String) -> [String: Any] {
-        let root = effectiveLibraryRoot()
+    /// 排序：名称（本地化对比）/ 修改时间（新的在前）；文件夹优先可关
+    static func sortEntries(_ items: [[String: Any]], sort: String, groupDirs: Bool) -> [[String: Any]] {
+        var out = items
+        if sort == "mtime" {
+            out.sort { a, b in
+                let da = a["mtime"] as? Double ?? 0
+                let db = b["mtime"] as? Double ?? 0
+                if da != db { return da > db }
+                return Self.nameLess(a, b)
+            }
+        } else {
+            out.sort { Self.nameLess($0, $1) }
+        }
+        if groupDirs {
+            // 稳定分区：目录在前，同组内保持既定顺序
+            var dirs: [[String: Any]] = []
+            var files: [[String: Any]] = []
+            for item in out {
+                if item["dir"] as? Bool ?? false { dirs.append(item) } else { files.append(item) }
+            }
+            out = dirs + files
+        }
+        return out
+    }
+
+    private static func nameLess(_ a: [String: Any], _ b: [String: Any]) -> Bool {
+        let an = a["name"] as? String ?? ""
+        let bn = b["name"] as? String ?? ""
+        return an.localizedStandardCompare(bn) == .orderedAscending
+    }
+
+    func libraryCreate(in rawDir: String, name: String, kind: String, root: String? = nil) -> [String: Any] {
+        let root = root ?? effectiveLibraryRoot()
         let dir = rawDir.isEmpty
             ? URL(fileURLWithPath: root)
             : (safeEntryURL(rawDir, root: root) ?? URL(fileURLWithPath: root))
@@ -520,14 +629,15 @@ final class EditorWindowController: NSWindowController {
             } else {
                 try Data().write(to: target)
             }
+            recordFileOp(kind: "create", from: "", to: target.path)
             return ["ok": true, "path": target.path]
         } catch {
             return ["error": "\(error)"]
         }
     }
 
-    func libraryRename(path raw: String, name: String) -> [String: Any] {
-        let root = effectiveLibraryRoot()
+    func libraryRename(path raw: String, name: String, root: String? = nil) -> [String: Any] {
+        let root = root ?? effectiveLibraryRoot()
         guard let url = safeEntryURL(raw, root: root) else { return ["error": "bad path"] }
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, !clean.contains("/") else { return ["error": "bad name"] }
@@ -535,6 +645,7 @@ final class EditorWindowController: NSWindowController {
         let target = url.deletingLastPathComponent().appendingPathComponent(clean).standardizedFileURL
         do {
             try FileManager.default.moveItem(at: url, to: target)
+            recordFileOp(kind: "rename", from: url.path, to: target.path)
             return ["ok": true, "path": target.path]
         } catch {
             return ["error": "\(error)"]
@@ -542,8 +653,8 @@ final class EditorWindowController: NSWindowController {
     }
 
     /// 删除进废纸篓（不直接抹掉）
-    func libraryDelete(path raw: String) -> [String: Any] {
-        let root = effectiveLibraryRoot()
+    func libraryDelete(path raw: String, root: String? = nil) -> [String: Any] {
+        let root = root ?? effectiveLibraryRoot()
         guard let url = safeEntryURL(raw, root: root) else { return ["error": "bad path"] }
 
         let fm = FileManager.default
@@ -558,14 +669,149 @@ final class EditorWindowController: NSWindowController {
         }
         do {
             try fm.moveItem(at: url, to: target)
+            // 进废纸篓的操作不记入可撤销栈（和 Typora 一致：只有 move/rename/create 可撤）
+            lastFileOp = nil
             return ["ok": true]
         } catch {
             return ["error": "\(error)"]
         }
     }
 
-    func libraryReveal(path raw: String) {
-        let root = effectiveLibraryRoot()
+    /// 复制一份：name copy.md，重名再往后加序号（Typora 的 Duplicate）
+    func libraryDuplicate(path raw: String, root: String? = nil) -> [String: Any] {
+        let root = root ?? effectiveLibraryRoot()
+        guard let url = safeEntryURL(raw, root: root) else { return ["error": "bad path"] }
+        let dir = url.deletingLastPathComponent()
+        let newName = Self.dedupeName(url.lastPathComponent, in: dir)
+        let target = dir.appendingPathComponent(newName).standardizedFileURL
+        do {
+            try FileManager.default.copyItem(at: url, to: target)
+            recordFileOp(kind: "create", from: "", to: target.path)
+            return ["ok": true, "path": target.path]
+        } catch {
+            return ["error": "\(error)"]
+        }
+    }
+
+    /// 目录里下一个可用名：name copy.md / name copy 2.md …
+    static func dedupeName(_ name: String, in dir: URL) -> String {
+        let fm = FileManager.default
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = ext.isEmpty ? "\(base) copy" : "\(base) copy.\(ext)"
+        var n = 2
+        while fm.fileExists(atPath: dir.appendingPathComponent(candidate).path) {
+            candidate = ext.isEmpty ? "\(base) copy \(n)" : "\(base) copy \(n).\(ext)"
+            n += 1
+        }
+        return candidate
+    }
+
+    /// 移动到另一个目录（树内拖拽的目标）。不能移进自己的子孙目录，不能覆盖。
+    func libraryMove(path raw: String, toDir rawTo: String, root: String? = nil) -> [String: Any] {
+        let root = root ?? effectiveLibraryRoot()
+        guard let url = safeEntryURL(raw, root: root),
+              let destDir = safeEntryURL(rawTo, root: root) else { return ["error": "bad path"] }
+        let srcPath = url.standardizedFileURL.path
+        let destPath = destDir.standardizedFileURL.path
+        // 把目录拖进自己（或子孙）里会形成环
+        if destPath.hasPrefix(srcPath + "/") { return ["error": "不能移动到自己的子目录"] }
+        if srcPath == destPath { return ["error": "已经在目标目录"] }
+
+        let target = destDir.appendingPathComponent(url.lastPathComponent).standardizedFileURL
+        guard !FileManager.default.fileExists(atPath: target.path) else {
+            return ["error": "目标目录已有同名项"]
+        }
+        do {
+            try FileManager.default.moveItem(at: url, to: target)
+            recordFileOp(kind: "move", from: url.path, to: target.path)
+            // 拖走的正是当前打开的文档：让 Web 层重新加载
+            if url.path == currentPath {
+                runJS("window.MFLibrary && window.MFLibrary.documentMoved(\(jsStringLiteral(target.path)))")
+            }
+            return ["ok": true, "path": target.path]
+        } catch {
+            return ["error": "\(error)"]
+        }
+    }
+
+    // MARK: 文件操作撤销（Typora：only the last one file operation is undoable）
+
+    private struct FileOp { var kind: String; var from: String; var to: String }
+    private var lastFileOp: FileOp?
+
+    private func recordFileOp(kind: String, from: String, to: String) {
+        lastFileOp = FileOp(kind: kind, from: from, to: to)
+    }
+
+    func libraryUndoFileOp() -> [String: Any] {
+        guard let op = lastFileOp else { return ["error": "没有可撤销的操作"] }
+        lastFileOp = nil
+        let fm = FileManager.default
+        switch op.kind {
+        case "create":
+            // 新建/复制 → 撤销就是删掉
+            if fm.fileExists(atPath: op.to) { try? fm.removeItem(at: URL(fileURLWithPath: op.to)) }
+            return ["ok": true, "path": op.to]
+        case "rename", "move":
+            guard fm.fileExists(atPath: op.to) else { return ["error": "目标已不存在"] }
+            let dir = (op.from as NSString).deletingLastPathComponent
+            try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            do {
+                try fm.moveItem(at: URL(fileURLWithPath: op.to), to: URL(fileURLWithPath: op.from))
+                return ["ok": true, "path": op.from]
+            } catch {
+                return ["error": "\(error)"]
+            }
+        default:
+            return ["error": "这类操作不能撤销"]
+        }
+    }
+
+    // MARK: 最近 / 固定根目录（Typora 的 Recent Locations / Pin）
+
+    static let libraryRecentsKey = "mf.library.recents"
+    static let libraryPinnedKey = "mf.library.pinned"
+
+    static func noteLibraryRoot(_ path: String) {
+        guard !path.isEmpty else { return }
+        var recents = UserDefaults.standard.stringArray(forKey: libraryRecentsKey) ?? []
+        recents.removeAll { $0 == path }
+        recents.insert(path, at: 0)
+        if recents.count > 8 { recents = Array(recents.prefix(8)) }
+        UserDefaults.standard.set(recents, forKey: libraryRecentsKey)
+    }
+
+    static func libraryRecents() -> [String: Any] {
+        let pinned = UserDefaults.standard.stringArray(forKey: libraryPinnedKey) ?? []
+        var recents = UserDefaults.standard.stringArray(forKey: libraryRecentsKey) ?? []
+        recents.removeAll { pinned.contains($0) }
+        return ["pinned": pinned, "recent": recents]
+    }
+
+    static func toggleLibraryPin(_ path: String) -> [String: Any] {
+        var pinned = UserDefaults.standard.stringArray(forKey: libraryPinnedKey) ?? []
+        if let i = pinned.firstIndex(of: path) {
+            pinned.remove(at: i)
+        } else {
+            pinned.insert(path, at: 0)
+        }
+        UserDefaults.standard.set(pinned, forKey: libraryPinnedKey)
+        return ["pinned": pinned]
+    }
+
+    static func removeLibraryRecent(_ path: String) {
+        var recents = UserDefaults.standard.stringArray(forKey: libraryRecentsKey) ?? []
+        recents.removeAll { $0 == path }
+        UserDefaults.standard.set(recents, forKey: libraryRecentsKey)
+    }
+
+    static func clearLibraryRecents() {
+        UserDefaults.standard.removeObject(forKey: libraryRecentsKey)
+    }
+
+    func libraryReveal(path raw: String, root: String? = nil) {
+        let root = root ?? effectiveLibraryRoot()
         guard let url = safeEntryURL(raw, root: root) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
@@ -578,6 +824,7 @@ final class EditorWindowController: NSWindowController {
         panel.beginSheetModal(for: window!) { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             Self.libraryRoot = url.path
+            Self.noteLibraryRoot(url.path)   // 手动选的也记进「最近文件夹」
             self?.startLibraryWatch()
             self?.runJS("window.MFLibrary && window.MFLibrary.rootChanged()")
         }
@@ -915,7 +1162,11 @@ final class EditorWindowController: NSWindowController {
     private func applyContent(path: String, content: String, title: String) {
         currentPath = path
         // 窗口里换了文档：上一个未命名文档的恢复文件作废
-        if !path.isEmpty { discardRecovery() }
+        if !path.isEmpty {
+            discardRecovery()
+            // 根目录会跟着文档走（见 library.js followDocument），顺手记进「最近文件夹」
+            Self.noteLibraryRoot(URL(fileURLWithPath: path).deletingLastPathComponent().path)
+        }
         window?.title = title
         window?.isDocumentEdited = false
         runJS("window.__loadContent(\(jsStringLiteral(path)), \(jsStringLiteral(content)), \(jsStringLiteral(title)))")

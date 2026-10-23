@@ -23,11 +23,15 @@
   var state = {
     root: '',
     current: '',     // 当前打开的文档路径（高亮用）
-    open: false,
     cache: {},       // 目录路径 -> [entry]
     loading: {},     // 目录路径 -> 是否正在加载
-    expanded: {}     // 目录路径 -> 是否展开
+    expanded: {},    // 目录路径 -> 是否展开
+    sort: 'name',    // name | mtime（Typora 的排序方式）
+    groupDirs: true, // 文件夹优先
+    drag: ''         // 正在拖动的文件路径
   };
+
+  var STORE_SORT = 'mf.library.sort';
 
   var pane = null, listEl = null, titleEl = null, rootBarEl = null;
   var refreshTimer = null;
@@ -38,6 +42,8 @@
     file: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M9 1.5H4v13h8V5z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9 1.5V5h4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
     folder: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M1.5 4.2h4l1.2 1.5h7.8v7.6h-13z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
     home: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1.8 1.8 7.2V14h12.4V7.2z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+    sort: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M3 4.2h10M3 8h7M3 11.8h4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+    clock: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 5.2V8l2.3 1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
     refresh: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M13.2 8A5.2 5.2 0 1 1 11.6 4.4" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M11.4 1.6v3h-3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>'
   };
 
@@ -76,7 +82,13 @@
     if (state.loading[path]) { if (cb) cb([]); return; }
     state.loading[path] = true;
 
-    bridge.callHandler('library.list', { path: path }, function (list) {
+    // 排序 / 文件夹优先交给原生做，Web 层只负责记住选择
+    bridge.callHandler('library.list', {
+      path: path,
+      root: state.root,
+      sort: state.sort,
+      groupDirs: state.groupDirs
+    }, function (list) {
       state.loading[path] = false;
       var items = Array.isArray(list) ? list : [];
       // 根目录用绝对路径做 key，子目录同样
@@ -124,7 +136,8 @@
     var cur = (!isDir && entry.path === state.current) ? ' mf-lib-current' : '';
 
     return '<div class="mf-lib-row' + (isDir ? ' mf-dir' : '') + cur + '" data-path="' + esc(entry.path) + '"' +
-      ' data-dir="' + (isDir ? '1' : '0') + '" style="padding-left:' + pad + 'px">' +
+      ' data-dir="' + (isDir ? '1' : '0') + '" draggable="true"' +
+      ' style="padding-left:' + pad + 'px">' +
       twisty + '<span class="mf-lib-icon">' + icon + '</span>' +
       '<span' + mark + '>' + esc(entry.name) + '</span></div>';
   }
@@ -304,26 +317,44 @@
 
   function closeMenu() { if (menuEl) menuEl.remove(); menuEl = null; }
 
-  function openMenu(x, y, entry) {
+  /** items 直接给定时按它渲染（排序菜单用），否则按 entry 生成常规菜单 */
+  function openMenu(x, y, entry, override) {
     closeMenu();
     var isDir = entry && !!entry.dir;
     var items = [];
 
-    if (!entry) {
+    if (override) {
+      items = override;
+    } else     if (!entry) {
       items.push({ label: '新建文件', act: function () { beginInlineEdit(null, null, 'file'); } });
       items.push({ label: '新建文件夹', act: function () { beginInlineEdit(null, null, 'dir'); } });
       items.push({ sep: true });
       items.push({ label: '打开文件夹…', act: function () { bridge.callHandler('library.chooseRoot', null, function () {}); } });
       items.push({ label: '刷新', act: function () { refresh(); } });
+      items.push({ sep: true });
+      items.push({ label: '撤销上一次文件操作', act: function () { window.MFLibrary.undoFileOp(); } });
     } else {
       if (!isDir) {
         items.push({ label: '打开', act: function () { openFile(entry.path); } });
+        items.push({ label: '在新窗口打开', act: function () {
+          bridge.callHandler('library.openInNewWindow', { path: entry.path }, function () {});
+        } });
         items.push({ sep: true });
+      } else {
+        items.push({ label: '打开文件夹', act: function () {
+          bridge.callHandler('library.setRoot', { path: entry.path }, function (r) { setRootFrom(r); });
+        } });
       }
       items.push({ label: '新建文件', act: function () { ensureExpanded(isDir ? entry.path : parentDir(entry.path)); beginInlineEdit(null, isDir ? entry : null, 'file'); } });
       items.push({ label: '新建文件夹', act: function () { ensureExpanded(isDir ? entry.path : parentDir(entry.path)); beginInlineEdit(null, isDir ? entry : null, 'dir'); } });
       items.push({ sep: true });
       items.push({ label: '复制路径', act: function () { bridge.callHandler('library.copyPath', { path: entry.path }, function () {}); } });
+      items.push({ label: '复制', act: function () {   // Typora 的 Duplicate
+        bridge.callHandler('library.duplicate', { path: entry.path }, function (res) {
+          if (res && res.error) { window.alert(res.error); return; }
+          refresh();
+        });
+      } });
       items.push({ label: '重命名', act: function () {
         var row = listEl.querySelector('[data-path="' + cssEscape(entry.path) + '"]');
         beginInlineEdit(row, entry, 'rename');
@@ -371,6 +402,227 @@
     });
   }
 
+  // ---------- 排序 / 最近文件夹（Typora 侧栏底部菜单） ----------
+
+  function setSort(key, groupDirs) {
+    if (key) state.sort = key === 'mtime' ? 'mtime' : 'name';
+    if (typeof groupDirs === 'boolean') state.groupDirs = !!groupDirs;
+    writeStore(STORE_SORT, { sort: state.sort, groupDirs: state.groupDirs });
+    refresh();
+  }
+
+  function openSortMenu(x, y) {
+    closeMenu();
+    var items = [
+      { label: '按名称' + (state.sort === 'name' ? ' ✓' : ''), act: function () { setSort('name'); } },
+      { label: '按修改时间' + (state.sort === 'mtime' ? ' ✓' : ''), act: function () { setSort('mtime'); } },
+      { sep: true },
+      { label: '文件夹优先' + (state.groupDirs ? ' ✓' : ''), act: function () { setSort(null, !state.groupDirs); } }
+    ];
+    openMenu(x, y, null, items);
+  }
+
+  /** 最近文件夹：固定的排在前面，每条带固定/取消固定；底部可清除列表 */
+  function openRecentsMenu(x, y) {
+    bridge.callHandler('library.recents', null, function (res) {
+      closeMenu();
+      var pinned = (res && res.pinned) || [];
+      var recent = (res && res.recent) || [];
+
+      menuEl = document.createElement('div');
+      menuEl.className = 'mf-lib-menu mf-lib-menu-wide';
+
+      function section(title) {
+        var h = document.createElement('div');
+        h.className = 'mf-lib-menu-head';
+        h.textContent = title;
+        menuEl.appendChild(h);
+      }
+      function entry(path, isPinned) {
+        var row = document.createElement('div');
+        row.className = 'mf-lib-menu-row';
+
+        var name = document.createElement('button');
+        name.className = 'mf-lib-menu-item';
+        name.textContent = baseName(path);
+        name.title = path;
+        name.addEventListener('click', function () {
+          closeMenu();
+          bridge.callHandler('library.setRoot', { path: path }, function (r) {
+            setRootFrom(r);
+          });
+        });
+
+        var pin = document.createElement('button');
+        pin.className = 'mf-lib-menu-pin';
+        pin.title = isPinned ? '取消固定' : '固定';
+        pin.textContent = isPinned ? '✔' : '＋';
+        pin.addEventListener('click', function () {
+          bridge.callHandler('library.pinRoot', { path: path }, function () {
+            closeMenu();
+            openRecentsMenu(x, y);
+          });
+        });
+
+        var del = document.createElement('button');
+        del.className = 'mf-lib-menu-pin';
+        del.title = '从列表移除';
+        del.textContent = '×';
+        del.addEventListener('click', function () {
+          bridge.callHandler('library.removeRecent', { path: path }, function () {
+            closeMenu();
+            openRecentsMenu(x, y);
+          });
+        });
+
+        row.appendChild(name);
+        row.appendChild(pin);
+        row.appendChild(del);
+        menuEl.appendChild(row);
+      }
+
+      if (pinned.length) {
+        section('固定的文件夹');
+        pinned.forEach(function (p) { entry(p, true); });
+      }
+      if (recent.length) {
+        section('最近的文件夹');
+        recent.forEach(function (p) { entry(p, false); });
+      }
+      if (!pinned.length && !recent.length) {
+        var empty = document.createElement('div');
+        empty.className = 'mf-lib-menu-head';
+        empty.textContent = '还没有最近文件夹';
+        menuEl.appendChild(empty);
+      } else {
+        var sep = document.createElement('div');
+        sep.className = 'mf-lib-menu-sep';
+        menuEl.appendChild(sep);
+        var clear = document.createElement('button');
+        clear.className = 'mf-lib-menu-item';
+        clear.textContent = '清除最近列表';
+        clear.addEventListener('click', function () {
+          bridge.callHandler('library.clearRecents', null, function () { closeMenu(); });
+        });
+        menuEl.appendChild(clear);
+      }
+
+      document.body.appendChild(menuEl);
+      var w = menuEl.offsetWidth, h = menuEl.offsetHeight;
+      menuEl.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, x)) + 'px';
+      menuEl.style.top = Math.max(6, Math.min(window.innerHeight - h - 36, y)) + 'px';
+    });
+  }
+
+  // ---------- 拖拽（Typora：树内移动 + 拖到正文插链接） ----------
+
+  function clearDropMarks() {
+    var marked = listEl ? listEl.querySelectorAll('.mf-lib-dropping') : [];
+    for (var i = 0; i < marked.length; i++) marked[i].classList.remove('mf-lib-dropping');
+  }
+
+  function moveEntry(path, toDir) {
+    bridge.callHandler('library.move', { path: path, toDir: toDir }, function (res) {
+      if (res && res.error) { window.alert(res.error); refresh(); return; }
+      // 拖走的是当前文档：跟着切过去
+      if (res && res.path && path === state.current) {
+        openFile(res.path);
+        return;
+      }
+      refresh();
+    });
+  }
+
+  /** 拖到正文：插入相对链接（Typora 拖文件进正文也是插链接） */
+  function insertLinkFor(path) {
+    var write = document.getElementById('write');
+    if (!write) return;
+    var dir = (window.MF && window.MF.docDir && window.MF.docDir()) || '';
+    var rel = (dir && path.indexOf(dir) === 0) ? path.slice(dir.length) : path;
+    var text = '[' + baseName(path).replace(/\[|\]/g, '') + '](' + rel + ')';
+
+    var point = state.dropPoint;
+    var pos = point && document.caretPositionFromPoint
+      ? document.caretPositionFromPoint(point.x, point.y) : null;
+    if (pos && pos.offsetNode && write.contains(pos.offsetNode)) {
+      try {
+        var r = document.createRange();
+        r.setStart(pos.offsetNode, pos.offset);
+        r.collapse(true);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      } catch (e) {}
+    } else {
+      write.focus();
+    }
+    if (window.MF && window.MF.programEdit) {
+      window.MF.programEdit(function () {
+        document.execCommand('insertText', false, text);
+      });
+    } else {
+      document.execCommand('insertText', false, text);
+    }
+  }
+
+  function wireDragAndDrop() {
+    listEl.addEventListener('dragstart', function (e) {
+      var row = e.target.closest ? e.target.closest('.mf-lib-row') : null;
+      if (!row) { e.preventDefault(); return; }
+      state.drag = row.getAttribute('data-path');
+      try {
+        e.dataTransfer.setData('text/plain', state.drag);
+        e.dataTransfer.effectAllowed = 'move';
+      } catch (err) {}
+    });
+
+    listEl.addEventListener('dragend', function () {
+      state.drag = '';
+      clearDropMarks();
+    });
+
+    listEl.addEventListener('dragover', function (e) {
+      if (!state.drag) return;
+      var row = e.target.closest ? e.target.closest('.mf-lib-row') : null;
+      clearDropMarks();
+      // 拖到目录行 = 移动进该目录；拖到空白处 = 移动回根目录
+      if (row && row.getAttribute('data-dir') === '1' &&
+          row.getAttribute('data-path') !== state.drag) {
+        row.classList.add('mf-lib-dropping');
+        e.preventDefault();
+      } else if (!row) {
+        e.preventDefault();
+      }
+    });
+
+    listEl.addEventListener('drop', function (e) {
+      var path = state.drag;
+      clearDropMarks();
+      if (!path) return;
+      e.preventDefault();
+      var row = e.target.closest ? e.target.closest('.mf-lib-row') : null;
+      var dest = (row && row.getAttribute('data-dir') === '1') ? row.getAttribute('data-path') : state.root;
+      if (!dest || dest === path || dest === parentDir(path)) return;
+      moveEntry(path, dest);
+    });
+
+    // 拖到正文：插链接
+    var write = document.getElementById('write');
+    if (!write) return;
+    write.addEventListener('dragover', function (e) {
+      if (!state.drag) return;
+      e.preventDefault();
+      state.dropPoint = { x: e.clientX, y: e.clientY };
+    });
+    write.addEventListener('drop', function (e) {
+      var path = state.drag;
+      if (!path) return;
+      e.preventDefault();
+      state.dropPoint = { x: e.clientX, y: e.clientY };
+      insertLinkFor(path);
+    });
+  }
+
   // ---------- 构建 ----------
 
   function build() {
@@ -389,8 +641,12 @@
       // Typora 把当前文件夹的操作放在侧栏底部
       '<div class="mf-lib-rootbar">' +
         '<span class="mf-lib-root-name" title="">—</span>' +
-        '<button class="mf-lib-act" data-act="root" title="打开文件夹…">' + ICON.home + '</button>' +
-        '<button class="mf-lib-act" data-act="refresh" title="刷新">' + ICON.refresh + '</button>' +
+        '<span class="mf-lib-acts">' +
+          '<button class="mf-lib-act" data-act="sort" title="排序">' + ICON.sort + '</button>' +
+          '<button class="mf-lib-act" data-act="recents" title="最近文件夹">' + ICON.clock + '</button>' +
+          '<button class="mf-lib-act" data-act="root" title="打开文件夹…">' + ICON.home + '</button>' +
+          '<button class="mf-lib-act" data-act="refresh" title="刷新">' + ICON.refresh + '</button>' +
+        '</span>' +
       '</div>';
 
     listEl = pane.querySelector('.mf-lib-list');
@@ -409,8 +665,13 @@
       var act = e.target.closest ? e.target.closest('[data-act]') : null;
       if (!act) return;
       var a = act.getAttribute('data-act');
+      var r = act.getBoundingClientRect();
+      // 菜单往左下角展开（按钮在侧栏底部）
+      var x = r.left, y = r.top;
       if (a === 'root') bridge.callHandler('library.chooseRoot', null, function () {});
       else if (a === 'refresh') refresh();
+      else if (a === 'sort') openSortMenu(x, y);
+      else if (a === 'recents') openRecentsMenu(x, y);
     });
 
     // 行点击：目录展开/收起，文件打开
@@ -453,6 +714,8 @@
       e.preventDefault();
       openMenu(e.clientX, e.clientY, null);
     });
+
+    wireDragAndDrop();
 
     document.addEventListener('mousedown', function (e) {
       if (!menuEl) return;
@@ -497,6 +760,13 @@
   build();
   state.expanded = readStore(STORE_EXPANDED, {}) || {};
 
+  // 排序偏好（Typora：排序方式 + 文件夹优先开关）
+  var savedSort = readStore(STORE_SORT, null);
+  if (savedSort) {
+    state.sort = savedSort.sort === 'mtime' ? 'mtime' : 'name';
+    state.groupDirs = savedSort.groupDirs !== false;
+  }
+
   bridge.callHandler('library.root', null, function (res) {
     setRootFrom(res);
   });
@@ -524,6 +794,18 @@
     changed: changed,
     rootChanged: rootChanged,
     followDocument: followDocument,
-    revealFile: revealFile
+    revealFile: revealFile,
+    /** 原生把当前文档移动到了新路径（拖拽时可能发生） */
+    documentMoved: function (path) {
+      state.current = path || '';
+      openFile(path);
+    },
+    /** 撤销上一次文件操作（新建/复制/重命名/移动） */
+    undoFileOp: function () {
+      bridge.callHandler('library.undoFileOp', null, function (res) {
+        if (res && res.error) { window.alert(res.error); return; }
+        refresh();
+      });
+    }
   };
 })();

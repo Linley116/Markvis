@@ -729,6 +729,123 @@ const TABLE_MD = [
         pasteSource.val === '# 标题\n\n内容源码文档' && pasteSource.md === '# 标题\n\n内容源码文档',
         JSON.stringify(pasteSource));
 
+  console.log('\n[14] 文件树 Typora 细节（F9b：排序 / 最近 / 复制 / 新窗口 / 拖拽）');
+  const f9b = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const calls = [];
+    const tree = [
+      { name: 'notes', path: '/root/notes', dir: true, ext: '' },
+      { name: 'a.md', path: '/root/a.md', dir: false, ext: 'md' }
+    ];
+    const sub = [{ name: 'deep.md', path: '/root/notes/deep.md', dir: false, ext: 'md' }];
+
+    const orig = window.bridge.callHandler;
+    window.bridge.callHandler = function (name, data, cb) {
+      calls.push({ name: name, data: data });
+      if (name === 'library.root' || name === 'library.setRoot') return cb({ root: '/root' });
+      if (name === 'library.list' && cb) return cb(data && data.path === '/root/notes' ? sub : tree);
+      if (name === 'library.recents' && cb) {
+        return cb({ pinned: ['/root/notes'], recent: ['/other'] });
+      }
+      if (cb) cb({ ok: true });
+    };
+
+    window.MFLibrary.rootChanged();
+    await wait(120);
+    window.MFLibrary.open();
+    await wait(120);
+
+    // --- 排序菜单 ---
+    document.querySelector('.mf-lib-rootbar [data-act="sort"]').click();
+    await wait(80);
+    const sortMenu = Array.from(document.querySelectorAll('.mf-lib-menu-item')).map(b => b.textContent);
+    const byTime = Array.from(document.querySelectorAll('.mf-lib-menu-item'))
+      .find(b => b.textContent.indexOf('按修改时间') === 0);
+    byTime.click();
+    await wait(120);
+    const lastList = calls.filter(c => c.name === 'library.list').pop();
+
+    // --- 最近文件夹菜单 ---
+    document.querySelector('.mf-lib-rootbar [data-act="recents"]').click();
+    await wait(80);
+    const recentsMenu = {
+      heads: Array.from(document.querySelectorAll('.mf-lib-menu-head')).map(h => h.textContent),
+      rows: Array.from(document.querySelectorAll('.mf-lib-menu-row .mf-lib-menu-item')).map(b => b.textContent)
+    };
+    document.querySelector('.mf-lib-menu-row .mf-lib-menu-item').click();  // 点固定项切根
+    await wait(120);
+    const setRoot = calls.filter(c => c.name === 'library.setRoot').pop();
+
+    // --- 右键复制 / 在新窗口打开 ---
+    window.MFLibrary.refresh();
+    await wait(120);
+    document.querySelector('.mf-lib-row[data-path="/root/a.md"]')
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 100, clientY: 100 }));
+    await wait(60);
+    const labels = Array.from(document.querySelectorAll('.mf-lib-menu-item')).map(b => b.textContent);
+    Array.from(document.querySelectorAll('.mf-lib-menu-item'))
+      .find(b => b.textContent === '复制').click();
+    await wait(100);
+    const dupCall = calls.filter(c => c.name === 'library.duplicate').pop();
+
+    document.querySelector('.mf-lib-row[data-path="/root/a.md"]')
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 100, clientY: 100 }));
+    await wait(60);
+    Array.from(document.querySelectorAll('.mf-lib-menu-item'))
+      .find(b => b.textContent === '在新窗口打开').click();
+    await wait(100);
+    const newWinCall = calls.filter(c => c.name === 'library.openInNewWindow').pop();
+
+    // --- 树内拖拽移动到目录 ---
+    const dt = new DataTransfer();
+    const row = document.querySelector('.mf-lib-row[data-path="/root/a.md"]');
+    const dirRow = document.querySelector('.mf-lib-row[data-path="/root/notes"]');
+    row.dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true }));
+    dirRow.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    const dropping = dirRow.classList.contains('mf-lib-dropping');
+    dirRow.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    row.dispatchEvent(new DragEvent('dragend', { dataTransfer: dt, bubbles: true }));
+    await wait(120);
+    const moveCall = calls.filter(c => c.name === 'library.move').pop();
+
+    // --- 拖到正文插相对链接 ---
+    window.__loadContent('/root/notes/当前.md', '# 当前文档\n\n正文。\n', '当前.md');
+    await wait(150);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    p.focus();
+    window.MF.setCaretBySourceOffset(p, 3);
+    const dt2 = new DataTransfer();
+    document.querySelector('.mf-lib-row[data-path="/root/notes/deep.md"]')
+      .dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt2, bubbles: true }));
+    p.dispatchEvent(new DragEvent('drop', { dataTransfer: dt2, bubbles: true, cancelable: true, clientX: 200, clientY: 200 }));
+    await wait(200);
+    const linked = window.__getMarkdown();
+
+    window.bridge.callHandler = orig;
+    return { sortMenu, lastList, recentsMenu, setRoot, labels, dupCall, newWinCall, dropping, moveCall, linked };
+  });
+  check('排序菜单有两档 + 文件夹优先',
+        f9b.sortMenu.length === 3 && /按名称/.test(f9b.sortMenu[0]) &&
+        /按修改时间/.test(f9b.sortMenu[1]) && /文件夹优先/.test(f9b.sortMenu[2]),
+        JSON.stringify(f9b.sortMenu));
+  check('排序方式传给原生列表', f9b.lastList && f9b.lastList.data.sort === 'mtime' &&
+        f9b.lastList.data.groupDirs === true && f9b.lastList.data.root === '/root',
+        JSON.stringify(f9b.lastList && f9b.lastList.data));
+  check('最近文件夹菜单渲染固定与最近两段',
+        f9b.recentsMenu.heads.length === 2 && f9b.recentsMenu.rows.length === 2 &&
+        f9b.recentsMenu.heads[0] === '固定的文件夹', JSON.stringify(f9b.recentsMenu));
+  check('点最近条目切换根目录', f9b.setRoot && f9b.setRoot.data.path === '/root/notes',
+        JSON.stringify(f9b.setRoot));
+  check('右键菜单有复制', f9b.labels.indexOf('复制') >= 0, JSON.stringify(f9b.labels));
+  check('复制走 library.duplicate', f9b.dupCall && f9b.dupCall.data.path === '/root/a.md',
+        JSON.stringify(f9b.dupCall));
+  check('在新窗口打开走 library.openInNewWindow',
+        f9b.newWinCall && f9b.newWinCall.data.path === '/root/a.md', JSON.stringify(f9b.newWinCall));
+  check('拖到目录高亮并走 library.move',
+        f9b.dropping === true && f9b.moveCall && f9b.moveCall.data.path === '/root/a.md' &&
+        f9b.moveCall.data.toDir === '/root/notes', JSON.stringify([f9b.dropping, f9b.moveCall]));
+  check('拖到正文插入相对链接', /\[deep\.md\]\(deep\.md\)/.test(f9b.linked), JSON.stringify(f9b.linked.slice(0, 80)));
+
   console.log('\n[11] 运行时错误');
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 

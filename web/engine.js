@@ -2790,6 +2790,9 @@
     blockRaw: blockRaw,
     inlineRaw: inlineRaw,
     markDirty: markDirty,
+    // 文件树拖拽插链接时用：走同一套撤销栈 + 当前文档目录（算相对路径）
+    programEdit: programEdit,
+    docDir: function () { return docBaseDir; },
     markDirtyFromCaret: markDirtyFromCaret,
     caretSourceOffset: caretSourceOffset,
     setCaretBySourceOffset: setCaretBySourceOffset,
