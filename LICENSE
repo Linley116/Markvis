@@ -32,3 +32,15 @@ This project bundles the following third-party software:
   https://github.com/highlightjs/highlight.js
   Vendored at web/vendor/highlight.min.js
 
+  KaTeX 0.16.11
+  Copyright (c) Khan Academy and contributors
+  Licensed under the MIT License
+  https://github.com/KaTeX/KaTeX
+  Vendored at web/vendor/katex/ (JS, CSS, woff2 fonts)
+
+  Mermaid 11.4.1
+  Copyright (c) Knut Sveidqvist and contributors
+  Licensed under the MIT License
+  https://github.com/mermaid-js/mermaid
+  Vendored at web/vendor/mermaid.min.js
+

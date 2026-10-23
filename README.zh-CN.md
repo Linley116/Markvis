@@ -30,11 +30,11 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 
 | | Electron 应用 | MarkFrame |
 |---|---|---|
-| 包体 | 约 150 MB | **约 500 KB** |
+| 包体 | 约 150 MB | **约 3.6 MB**（其中 2.5 MB 是 Mermaid） |
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 6,270 行：Swift 1,390 行、Web 内核 3,400 行、功能模块 500 行、测试 970 行。
+整个编辑器约 6,570 行：Swift 1,410 行、Web 内核 3,700 行、功能模块 500 行、测试 970 行。
 
 ### 功能
 
@@ -52,10 +52,11 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | **大纲** | `Cmd+Shift+O`，标题树 + 当前节高亮 |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，`Cmd+Shift+L` |
+| **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，不在启动路径上 |
 | **脚注 / 目录** | `[^id]` 引用 + `[^id]: ...` 定义（点击互相跳转），`[TOC]` 按当前标题自动重建 |
 | **拼写检查** | 输入时用系统词典检查（`Cmd+;` 切换） |
 | **文件** | 双击 `.md`、拖拽打开、最近打开、命令行参数、自动保存、关窗确认、未命名文档崩溃恢复 |
-| **导出** | 分页 A4 PDF、自包含 HTML（本地图片内联为 data URL）、代码高亮、粘贴图片落到 `assets/` |
+| **导出** | 分页 A4 PDF、自包含 HTML（图片与 KaTeX 字体都内联为 data URL）、代码高亮、粘贴图片落到 `assets/` |
 
 ### 架构
 
@@ -147,7 +148,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 69 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 75 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 40 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容

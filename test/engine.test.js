@@ -474,6 +474,49 @@ function check(name, cond, extra) {
   check('往返保留引用形式', /\[示例\]\[ref\]/.test(refLinks.md), refLinks.md.split('\n')[0]);
   check('往返保留定义行', /\[ref\]: https:\/\/example\.com\/a "标题A"/.test(refLinks.md), JSON.stringify(refLinks.md));
 
+  console.log('\n[7.11] 公式与图表（F5 / F6）');
+  const mathMmd = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = [
+      '行内 $a^2+b^2=c^2$ 公式。',
+      '',
+      '$$',
+      '\\int_0^1 x^2 \\, dx = \\frac{1}{3}',
+      '$$',
+      '',
+      '```mermaid',
+      'graph TD',
+      '  A[开始] --> B[结束]',
+      '```'
+    ].join('\n');
+    window.__loadContent('', src, 't');
+
+    // 两个库都是按需注入的，等它们加载完
+    for (let i = 0; i < 60; i++) {
+      await wait(200);
+      const m = document.querySelector('[mdtype="math_inline"]');
+      const b = document.querySelector('[mdtype="math_block"]');
+      const d = document.querySelector('[mdtype="mermaid"]');
+      if (m && m.querySelector('.katex') && b && b.querySelector('.katex') && d && d.querySelector('svg')) break;
+    }
+
+    const m = document.querySelector('[mdtype="math_inline"]');
+    const b = document.querySelector('[mdtype="math_block"]');
+    const d = document.querySelector('[mdtype="mermaid"]');
+    return {
+      inlineKatex: !!(m && m.querySelector('.katex')),
+      blockDisplay: !!(b && b.querySelector('.katex-display')),
+      mmdSvg: !!(d && d.querySelector('svg')),
+      md: window.__getMarkdown()
+    };
+  });
+  check('行内公式渲染成 KaTeX', mathMmd.inlineKatex === true);
+  check('块级公式用 display 模式', mathMmd.blockDisplay === true);
+  check('mermaid 渲染出 SVG', mathMmd.mmdSvg === true);
+  check('往返保留行内公式', /\$a\^2\+b\^2=c\^2\$/.test(mathMmd.md), mathMmd.md.split('\n')[0]);
+  check('往返保留块级公式', /\$\$\n\\int_0\^1 x\^2 \\, dx = \\frac\{1\}\{3\}\n\$\$/.test(mathMmd.md), JSON.stringify(mathMmd.md));
+  check('往返保留 mermaid 围栏', /```mermaid\ngraph TD\n  A\[开始\] --> B\[结束\]\n```/.test(mathMmd.md), JSON.stringify(mathMmd.md));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

@@ -606,7 +606,7 @@ final class EditorWindowController: NSWindowController {
         runJSReturning(js) { [weak self] result in
             guard let self = self, let raw = result as? String, !raw.isEmpty else { return }
             // 图片转 data URL，导出的单文件才是真正自包含的
-            let html = self.inlineImages(in: self.injectCSS(into: raw))
+            let html = self.inlineImages(in: self.injectCSS(into: raw, forPrint: false))
             self.presentExportPanel(ext: "html") { url in
                 do {
                     try html.write(to: url, atomically: true, encoding: .utf8)
@@ -624,10 +624,53 @@ final class EditorWindowController: NSWindowController {
     ///
     /// 不能在 JS 里读 document.styleSheets：WKWebView 把 file:// 样式表当跨域，
     /// cssRules 会抛 SecurityError，导致导出文件完全没有样式。
-    private func injectCSS(into html: String) -> String {
-        let marker = "/*__MF_CSS__*/"
-        guard html.contains(marker) else { return html }
-        return html.replacingOccurrences(of: marker, with: bundledCSS())
+    private func injectCSS(into html: String, forPrint: Bool = true) -> String {
+        var out = html
+        if out.contains("/*__MF_CSS__*/") {
+            out = out.replacingOccurrences(of: "/*__MF_CSS__*/", with: bundledCSS())
+        }
+        if out.contains("/*__MF_KATEX_CSS__*/") {
+            out = out.replacingOccurrences(of: "/*__MF_KATEX_CSS__*/",
+                                           with: katexCSS(embedFonts: !forPrint))
+        }
+        return out
+    }
+
+    /// KaTeX 的样式表。PDF 走「字体随壳目录一起拷」；HTML 导出走 base64 内联，
+    /// 这样导出的单文件换台机器也能正确显示公式。
+    private func katexCSS(embedFonts: Bool) -> String {
+        guard let cssURL = Bundle.main.resourceURL?
+            .appendingPathComponent("web/vendor/katex/katex.min.css"),
+              let css = try? String(contentsOf: cssURL, encoding: .utf8) else { return "" }
+        guard embedFonts else { return css }
+
+        guard let re = try? NSRegularExpression(pattern: "url\\(fonts/([^)]+\\.woff2)\\)") else {
+            return css
+        }
+        let fontsDir = cssURL.deletingLastPathComponent().appendingPathComponent("fonts")
+        var out = ""
+        var cursor = css.startIndex
+        for m in re.matches(in: css, range: NSRange(css.startIndex..., in: css)) {
+            guard let whole = Range(m.range, in: css),
+                  let nameRange = Range(m.range(at: 1), in: css) else { continue }
+            let name = String(css[nameRange])
+            let fontURL = fontsDir.appendingPathComponent(name)
+            guard let data = try? Data(contentsOf: fontURL) else { continue }
+            out += css[cursor..<whole.lowerBound]
+            out += "url(data:font/woff2;base64,\(data.base64EncodedString()))"
+            cursor = whole.upperBound
+        }
+        out += css[cursor...]
+        return out
+    }
+
+    /// 打印壳目录里放一份字体，katex.min.css 里的相对 url(fonts/…) 就能解析
+    private func copyKatexFonts(to dir: URL) {
+        guard let src = Bundle.main.resourceURL?
+            .appendingPathComponent("web/vendor/katex/fonts") else { return }
+        let dst = dir.appendingPathComponent("fonts", isDirectory: true)
+        try? FileManager.default.removeItem(at: dst)
+        try? FileManager.default.copyItem(at: src, to: dst)
     }
 
     private func bundledCSS() -> String {
@@ -716,8 +759,17 @@ final class EditorWindowController: NSWindowController {
     private func startRenderPipeline(shellHTML: String) {
         // 打印壳在临时目录里，读不到文档目录的图片：先内联成 data URL
         let html = inlineImages(in: injectCSS(into: shellHTML))
-        let shell = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("markframe-print-\(UUID().uuidString).html")
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("markframe-print-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            showErrorAlert(error)
+            runJS("window.__finishExport && window.__finishExport()")
+            return
+        }
+        copyKatexFonts(to: dir)
+        let shell = dir.appendingPathComponent("page.html")
         do {
             try html.write(to: shell, atomically: true, encoding: .utf8)
         } catch {
@@ -735,7 +787,7 @@ final class EditorWindowController: NSWindowController {
         exportWindow = win
         exportWebView = web
 
-        web.loadFileURL(shell, allowingReadAccessTo: shell.deletingLastPathComponent())
+        web.loadFileURL(shell, allowingReadAccessTo: dir)
         waitForShell(tries: 0, shell: shell)
     }
 
@@ -833,7 +885,7 @@ final class EditorWindowController: NSWindowController {
         }
         ctx.closePDF()
 
-        try? FileManager.default.removeItem(at: shell)
+        try? FileManager.default.removeItem(at: shell.deletingLastPathComponent())
         NSWorkspace.shared.activateFileViewerSelecting([url])
         mfLog("export done: \(exportRendered.count) pages -> \(url.lastPathComponent)")
     }

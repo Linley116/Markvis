@@ -29,11 +29,11 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 
 | | Electron apps | MarkFrame |
 |---|---|---|
-| Binary size | ~150 MB | **~500 KB** |
+| Binary size | ~150 MB | **~3.6 MB** (2.5 MB of it is Mermaid) |
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~6,270 lines: 1,390 Swift, 3,400 web core, 500 features, 970 tests.
+The whole editor is ~6,570 lines: 1,410 Swift, 3,700 web core, 500 features, 970 tests.
 
 ### Features
 
@@ -51,10 +51,11 @@ The whole editor is ~6,270 lines: 1,390 Swift, 3,400 web core, 500 features, 970
 | **Outline** | `Cmd+Shift+O`, heading tree with current-section tracking |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord, `Cmd+Shift+L` |
+| **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, never on the startup path |
 | **Footnotes / TOC** | `[^id]` references with click-through to `[^id]: ...` definitions, `[TOC]` rebuilt from the current headings |
 | **Spelling** | System spellcheck while typing (`Cmd+;` to toggle) |
 | **Files** | Double-click `.md`, drag to window, Open Recent, CLI argument, autosave, close confirmation, crash recovery for untitled documents |
-| **Export** | Paginated A4 PDF, self-contained HTML (local images inlined as data URLs), code highlighting, pasted images saved to `assets/` |
+| **Export** | Paginated A4 PDF, self-contained HTML (images and KaTeX fonts inlined as data URLs), code highlighting, pasted images saved to `assets/` |
 
 ### Architecture
 
@@ -146,7 +147,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 69 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 75 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content

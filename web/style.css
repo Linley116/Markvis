@@ -398,6 +398,49 @@ a:hover { text-decoration: underline; }
   border-bottom-color: var(--accent);
 }
 
+/* ---------- 公式 / 图表 ---------- */
+
+.md-math {
+  cursor: default;
+  padding: 0 1px;
+}
+
+.md-math .katex { font-size: 1.04em; }
+
+.md-math-block {
+  text-align: center;
+  margin: 1.2em 0;
+  cursor: default;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.md-math-block .katex-display { margin: 0; }
+
+.md-math-ph,
+.md-mermaid-ph {
+  color: var(--muted);
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.md-mermaid {
+  text-align: center;
+  cursor: default;
+  margin: 1.2em 0;
+}
+
+.md-mermaid svg { max-width: 100%; height: auto; }
+
+.md-mermaid-error,
+.md-math-error {
+  color: #c0392b;
+  font-size: 12px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
 /* ---------- 状态栏 ---------- */
 
 #status {

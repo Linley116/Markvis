@@ -125,6 +125,21 @@
     while (i < src.length) {
       var c = src[i];
 
+      // 行内公式 $...$（$ 后面不能是空白，收盘 $ 前也不能是空白）
+      if (c === '$' && src[i + 1] && src[i + 1] !== '$' && /\S/.test(src[i + 1])) {
+        var mathEnd = -1;
+        for (var mj = i + 1; mj < src.length; mj++) {
+          if (src[mj] === '$' && src[mj - 1] !== '\\' && src[mj - 1] !== ' ') { mathEnd = mj; break; }
+          if (src[mj] === '\n') break;
+        }
+        if (mathEnd > i + 1) {
+          flush();
+          out.push({ type: 'math', tex: src.slice(i + 1, mathEnd) });
+          i = mathEnd + 1;
+          continue;
+        }
+      }
+
       // 反斜杠转义
       if (c === '\\' && i + 1 < src.length && ESCAPABLE.test(src[i + 1])) {
         buf += src[i + 1];
@@ -477,6 +492,30 @@
         continue;
       }
 
+      // 块级公式 $$ ... $$（可跨行）
+      if (/^\s*\$\$/.test(line)) {
+        var texLines = [];
+        var firstChunk = line.replace(/^\s*\$\$/, '');
+        if (/\$\$\s*$/.test(firstChunk) && firstChunk.trim()) {
+          texLines.push(firstChunk.replace(/\$\$\s*$/, ''));
+          i++;
+        } else {
+          if (firstChunk.trim()) texLines.push(firstChunk);
+          i++;
+          while (i < lines.length && !/\$\$\s*$/.test(lines[i])) {
+            texLines.push(lines[i]);
+            i++;
+          }
+          if (i < lines.length) {
+            var tailChunk = lines[i].replace(/\$\$\s*$/, '');
+            if (tailChunk.trim()) texLines.push(tailChunk);
+            i++;
+          }
+        }
+        blocks.push({ type: 'math_block', tex: texLines.join('\n').trim() });
+        continue;
+      }
+
       // 引用式链接的定义 [id]: url "title"
       var mLinkDef = LINK_DEF_RE.exec(line);
       if (mLinkDef) {
@@ -520,6 +559,7 @@
         if (/^(\s*)([-*+]|\d+[.)])\s+/.test(l)) break;
         if (/^\[\^[^\]\s]+\]:/.test(l)) break;
         if (LINK_DEF_RE.test(l)) break;
+        if (/^\s*\$\$/.test(l)) break;
         if (/^\s*\[TOC\]\s*$/i.test(l)) break;
         if (isFenceLine(l)) break;
         if (isHrLine(l)) break;
@@ -599,6 +639,13 @@
             '<a href="' + escapeAttr(n.href) + '">' + escapeHtml(n.href) + '</a>' +
             metaHTML('close', '>') + '</span>';
 
+        case 'math': {
+          var mtex = n.tex;
+          return '<span class="md-inline md-math" mdtype="math_inline" contenteditable="false"' +
+            ' data-tex="' + escapeAttr(mtex) + '" data-src="' + escapeAttr('$' + mtex + '$') + '">' +
+            '<span class="md-math-ph">' + escapeHtml('$' + mtex + '$') + '</span></span>';
+        }
+
         case 'fnref': {
           var flabel = String(n.label);
           return '<sup class="md-fn-ref" mdtype="footnote_ref" contenteditable="false" title="跳到脚注"' +
@@ -632,6 +679,15 @@
 
       case 'fences': {
         var lang = (b.lang || '').toLowerCase();
+
+        // mermaid：渲染成图表块（源码编辑走源码模式）
+        if (lang === 'mermaid') {
+          var rawFence = '```mermaid\n' + b.text + '\n```';
+          return '<div class="md-block md-mermaid" mdtype="mermaid" contenteditable="false"' +
+            ' data-code="' + escapeAttr(b.text) + '" data-src="' + escapeAttr(rawFence) + '"' + cid + '>' +
+            '<div class="md-mermaid-ph">' + escapeHtml(b.text) + '</div></div>';
+        }
+
         var codeHTML = escapeHtml(b.text);
 
         // 有 highlight.js 且语言已注册时就地高亮（rawText 读 textContent，不受影响）
@@ -657,6 +713,12 @@
       case 'toc':
         // 目录内容由 refreshTOC() 生成；整块不可编辑，当作原子处理
         return '<div class="md-block md-toc" mdtype="toc" contenteditable="false" data-src="[TOC]"' + cid + '></div>';
+
+      case 'math_block':
+        return '<div class="md-block md-math-block" mdtype="math_block" contenteditable="false"' +
+          ' data-tex="' + escapeAttr(b.tex) + '" data-src="' +
+          escapeAttr('$$\n' + b.tex + '\n$$') + '"' + cid + '>' +
+          '<span class="md-math-ph">' + escapeHtml(b.tex) + '</span></div>';
 
       case 'def_link':
         return '<div class="md-block md-fn-def md-link-def" mdtype="def_link" data-label="' +
@@ -804,10 +866,101 @@
     }
   }
 
+  // =====================================================================
+  // 5.5 公式 / 图表的懒加载
+  //     两个库都只在文档里真的出现对应节点时才注入：KaTeX ~640KB（含字体），
+  //     Mermaid ~2.5MB。没有公式的文档完全不受影响。
+  // =====================================================================
+
+  var libState = { katex: 0, mermaid: 0 };   // 0 未加载 / 1 加载中 / 2 就绪
+  var mmdSeq = 0;
+
+  function injectScript(src, onload) {
+    var sc = document.createElement('script');
+    sc.src = src;
+    sc.onload = onload;
+    document.head.appendChild(sc);
+  }
+
+  function ensureKatex() {
+    if (window.katex || libState.katex) return;
+    libState.katex = 1;
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'vendor/katex/katex.min.css';
+    document.head.appendChild(link);
+    injectScript('vendor/katex/katex.min.js', function () {
+      libState.katex = 2;
+      hydrateMath();
+    });
+  }
+
+  function hydrateMath() {
+    var nodes = write.querySelectorAll('[mdtype="math_inline"],[mdtype="math_block"]');
+    if (!nodes.length) return;
+    if (!window.katex) { ensureKatex(); return; }
+
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (el.getAttribute('data-rendered') === '1') continue;
+      var tex = el.getAttribute('data-tex') || '';
+      try {
+        el.innerHTML = window.katex.renderToString(tex, {
+          displayMode: el.getAttribute('mdtype') === 'math_block',
+          throwOnError: false,
+          output: 'html'
+        });
+        el.setAttribute('data-rendered', '1');
+      } catch (e) {
+        el.innerHTML = '<span class="md-math-ph">' + escapeHtml(tex) + '</span>';
+      }
+    }
+  }
+
+  function ensureMermaid() {
+    if (window.mermaid || libState.mermaid) return;
+    libState.mermaid = 1;
+    injectScript('vendor/mermaid.min.js', function () {
+      try {
+        window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+      } catch (e) { console.warn('mermaid init failed', e); }
+      libState.mermaid = 2;
+      hydrateMermaid();
+    });
+  }
+
+  function hydrateMermaid() {
+    var nodes = write.querySelectorAll('[mdtype="mermaid"]');
+    if (!nodes.length) return;
+    if (!window.mermaid) { ensureMermaid(); return; }
+
+    for (var i = 0; i < nodes.length; i++) {
+      (function (el) {
+        if (el.getAttribute('data-rendered') === '1') return;
+        var code = el.getAttribute('data-code') || '';
+        var id = 'mf-mmd-' + (++mmdSeq);
+        try {
+          window.mermaid.render(id, code).then(function (res) {
+            el.innerHTML = res.svg;
+            el.setAttribute('data-rendered', '1');
+          }).catch(function () {
+            el.innerHTML = '<pre class="md-mermaid-error">' + escapeHtml(code) + '</pre>';
+            el.setAttribute('data-rendered', '1');
+          });
+        } catch (e) {
+          el.innerHTML = '<pre class="md-mermaid-error">' + escapeHtml(code) + '</pre>';
+          el.setAttribute('data-rendered', '1');
+        }
+      })(nodes[i]);
+    }
+  }
+
   function renderDoc() {
     write.innerHTML = doc.map(renderBlock).join('');
     padEmpties();
     refreshTOC();
+    hydrateMath();
+    hydrateMermaid();
   }
 
   function loadMarkdown(text) {
@@ -978,7 +1131,9 @@
         return tableRaw(el);
 
       case 'toc':
-        return el.getAttribute('data-src') || '[TOC]';
+      case 'math_block':
+      case 'mermaid':
+        return el.getAttribute('data-src') || '';
 
       case 'def_link': {
         var bodyEl = el.querySelector('.md-link-body');
@@ -1408,6 +1563,8 @@
     updateExpand();
     updateWordCount();
     refreshTOC();
+    hydrateMath();
+    hydrateMermaid();
   }, 200);
 
   // =====================================================================
@@ -2055,6 +2212,7 @@
 
   // 原生侧会用 web/style.css 的全文替换这个占位符
   var CSS_SLOT = '/*__MF_CSS__*/';
+  var KATEX_CSS_SLOT = '/*__MF_KATEX_CSS__*/';
 
   function printContentSize() {
     return { w: PRINT.w - PRINT.pad * 2, h: PRINT.h - PRINT.pad * 2 };
@@ -2524,6 +2682,7 @@
 
     return '<!DOCTYPE html>\n<html data-theme="light">\n<head>\n<meta charset="utf-8">\n' +
       '<style>\n' + CSS_SLOT + '\n</style>\n' +
+      '<style>\n' + KATEX_CSS_SLOT + '\n</style>\n' +
       '<style>\n' + extra + '\n</style>\n</head>\n' +
       '<body class="mf-print mf-export">\n<div id="mf-page-root"></div>\n' +
       '<script>\n' +
@@ -2554,6 +2713,7 @@
       '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
       '<title>' + escapeHtml(title) + '</title>\n' +
       '<style>\n' + CSS_SLOT + '\n</style>\n' +
+      '<style>\n' + KATEX_CSS_SLOT + '\n</style>\n' +
       '<style>\n' +
       'html, body { height: auto !important; overflow: visible !important; background: #fff !important; }\n' +
       '#scroll { height: auto !important; overflow: visible !important; }\n' +
