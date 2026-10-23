@@ -720,6 +720,108 @@ function check(name, cond, extra) {
   const afterSwitch = await page.evaluate(() => window.__getMarkdown());
   check('打开新文档后不会撤销到上一个文档', afterSwitch === '另一个文档', JSON.stringify(afterSwitch));
 
+  console.log('\n[7.15] 嵌套块（T4）：子列表 / 项内代码块 / 多段引用');
+  const nest = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const load = async (text) => {
+      window.__loadContent('', text, 't');
+      await wait(240);
+      return {
+        md: window.__getMarkdown(),
+        nestedLists: document.querySelectorAll('li > ul, li > ol').length,
+        liParas: document.querySelectorAll('li > p[mdtype="paragraph"]').length,
+        liFences: document.querySelectorAll('li > pre[mdtype="fences"]').length,
+        quoteParas: document.querySelectorAll('blockquote > p[mdtype="paragraph"]').length,
+        quoteLists: document.querySelectorAll('blockquote > ul, blockquote > ol').length
+      };
+    };
+
+    const nested = await load('- 第一项\n  - 子项 A\n  - 子项 B\n- 第二项');
+    const deep = await load('- a\n  - b\n    - c');
+    const fenced = await load('- 第一项\n\n  ```js\n  const a = 1;\n  ```\n\n- 第二项');
+    const multiPara = await load('- 第一段\n\n  第二段\n- 第二项');
+    const multiQuote = await load('> 第一段\n>\n> 第二段');
+    const quoteList = await load('> - 甲\n> - 乙\n\n> 结尾');
+    const ordered = await load('1. 一\n   1. 1.1\n   2. 1.2\n2. 二');
+    return { nested, deep, fenced, multiPara, multiQuote, quoteList, ordered };
+  });
+  check('子列表挂在 li 里', nest.nested.nestedLists === 1 && /- 第一项/.test(nest.nested.md),
+        JSON.stringify(nest.nested.md));
+  check('三级嵌套也能解析', nest.deep.nestedLists === 2 && /- a[\s\S]*- b[\s\S]*- c/.test(nest.deep.md),
+        JSON.stringify(nest.deep.md));
+  check('列表项里能放代码块', nest.fenced.liFences === 1 && /```js[\s\S]*const a = 1;/.test(nest.fenced.md),
+        JSON.stringify(nest.fenced.md));
+  check('列表项里能放多段', nest.multiPara.liParas === 2 && /第一段[\s\S]*第二段/.test(nest.multiPara.md),
+        JSON.stringify(nest.multiPara.md));
+  check('引用里能放多段', nest.multiQuote.quoteParas === 2 && /第一段[\s\S]*第二段/.test(nest.multiQuote.md),
+        JSON.stringify(nest.multiQuote.md));
+  check('引用里能放列表', nest.quoteList.quoteLists === 1 && /> - 甲/.test(nest.quoteList.md),
+        JSON.stringify(nest.quoteList.md));
+  check('有序列表嵌套编号保留', /1\. 一[\s\S]*1\. 1\.1[\s\S]*2\. 1\.2[\s\S]*2\. 二/.test(nest.ordered.md),
+        JSON.stringify(nest.ordered.md));
+
+  // 序列化必须幂等：parse(serialize(x)) === serialize(x)
+  const stable = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const cases = [
+      '- 第一项\n  - 子项 A\n  - 子项 B\n- 第二项',
+      '- a\n  - b\n    - c',
+      '- 第一项\n\n  ```js\n  const a = 1;\n  ```\n\n- 第二项',
+      '- 第一段\n\n  第二段\n- 第二项',
+      '> 第一段\n>\n> 第二段',
+      '> - 甲\n> - 乙\n\n> 结尾',
+      '1. 一\n   1. 1.1\n   2. 1.2\n2. 二'
+    ];
+    const bad = [];
+    for (const c of cases) {
+      window.__loadContent('', c, 't');
+      await wait(220);
+      const md1 = window.__getMarkdown();
+      window.__loadContent('', md1, 't');
+      await wait(220);
+      if (window.__getMarkdown() !== md1) bad.push(c);
+    }
+    return bad;
+  });
+  check('嵌套结构序列化幂等', stable.length === 0, JSON.stringify(stable));
+
+  // 交互：嵌套项里回车应拆这一项，而不是拆散整个列表（leafBlock 的回归）
+  const enterNested = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '- a\n  - bcd', 't');
+    document.getElementById('write').focus();
+    await wait(120);
+    const li = document.querySelectorAll('li')[1];
+    window.MF.setCaretBySourceOffset(li, 2);
+    return true;
+  });
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(450);
+  const nestedSplit = await page.evaluate(() => ({
+    items: Array.from(document.querySelectorAll('li')).map(l => l.textContent),
+    md: window.__getMarkdown()
+  }));
+  check('嵌套项里回车只拆这一项',
+        nestedSplit.items.length === 3 && nestedSplit.items[1] === 'bc' && nestedSplit.items[2] === 'd',
+        JSON.stringify(nestedSplit));
+
+  // 交互：多块条目段末回车生成空行，输入落在空行里
+  await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', '- 第一段\n\n  第二段', 't');
+    document.getElementById('write').focus();
+    await wait(150);
+    const para = document.querySelectorAll('li')[0].querySelector('p[mdtype="paragraph"]');
+    window.MF.setCaretBySourceOffset(para, 3);
+  });
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  await page.keyboard.type('新段');
+  await page.waitForTimeout(450);
+  const typedInEmpty = await page.evaluate(() => window.__getMarkdown());
+  check('条目内段末回车后输入落到新行',
+        typedInEmpty === '- 第一段\n\n  新段\n\n  第二段', JSON.stringify(typedInEmpty));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

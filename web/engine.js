@@ -358,14 +358,37 @@
     return found;
   }
 
+  var LIST_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+
+  function indentOf(line) {
+    var m = /^(\s*)/.exec(line);
+    return m ? m[1].length : 0;
+  }
+
+  /** 去掉至多 n 个前导空白；不够就原样返回，不会误吃正文 */
+  function stripIndent(line, n) {
+    var k = 0;
+    while (k < n && k < line.length && (line[k] === ' ' || line[k] === '\t')) k++;
+    return line.slice(k);
+  }
+
   function parseBlocks(src) {
     var lines = String(src).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
-    var blocks = [];
-    var i = 0;
 
     // 引用式链接的定义可能出现在使用之后，先整篇扫一遍
     var defs = scanLinkDefs(lines);
     if (defs) linkDefs = defs;
+
+    return parseLines(lines);
+  }
+
+  /**
+   * 解析一组行。列表项内容和引用内容都是「去掉前缀后的一组行」，
+   * 所以这里可以递归 —— 这就是 T4「嵌套块」的入口。
+   */
+  function parseLines(lines) {
+    var blocks = [];
+    var i = 0;
 
     while (i < lines.length) {
       var line = lines[i];
@@ -423,46 +446,68 @@
         continue;
       }
 
-      // 引用
+      // 引用（内部是完整的块结构：多段、列表、代码块都能放）
       if (/^\s*>/.test(line)) {
         var quoteBody = [];
         while (i < lines.length && /^\s*>/.test(lines[i])) {
           quoteBody.push(lines[i].replace(/^\s*>\s?/, ''));
           i++;
         }
-        blocks.push({ type: 'blockquote', inline: parseInline(quoteBody.join('\n')) });
+        blocks.push({ type: 'blockquote', blocks: parseLines(quoteBody) });
         continue;
       }
 
-      // 列表
-      var mList = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(line);
+      // 列表（支持嵌套与多块条目）
+      var mList = LIST_RE.exec(line);
       if (mList) {
         var ordered = /\d/.test(mList[2]);
         var listStart = ordered ? (parseInt(mList[2], 10) || 1) : 1;
-        var indent = mList[1].length;
+        var baseIndent = mList[1].length;
         var items = [];
+        var pendingBlank = 0;
 
         while (i < lines.length) {
-          var mItem = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(lines[i]);
-          if (!mItem) {
-            // 缩进续行并入上一项
-            if (items.length && /^\s+\S/.test(lines[i])) {
-              items[items.length - 1].text += '\n' + lines[i].trim();
-              i++;
-              continue;
-            }
-            break;
+          var l = lines[i];
+
+          if (/^\s*$/.test(l)) { pendingBlank++; i++; continue; }
+
+          var mItem = LIST_RE.exec(l);
+          var ind = mItem ? mItem[1].length : indentOf(l);
+          var sameKind = mItem && (/\d/.test(mItem[2]) === ordered);
+
+          // 同级新条目
+          if (mItem && ind === baseIndent && sameKind) {
+            items.push({ marker: mItem[2] + ' ', lines: [mItem[3]] });
+            pendingBlank = 0;
+            i++;
+            continue;
           }
-          if (mItem[1].length !== indent || /\d/.test(mItem[2]) !== ordered) break;
-          items.push({ text: mItem[3] });
-          i++;
+          // 更深缩进：这一条的内容（子列表 / 缩进续行 / 代码块）。
+          // 去掉的是「条目内容列」（基础缩进 + marker 宽度）之前的空白，
+          // 这样条目里的段落不会被带着缩进，子列表也能回到 0 列。
+          if (items.length && ind > baseIndent) {
+            var cur = items[items.length - 1];
+            if (pendingBlank) { cur.lines.push(''); pendingBlank = 0; }
+            cur.lines.push(stripIndent(l, baseIndent + cur.marker.length));
+            i++;
+            continue;
+          }
+          // 惰性续行：还没出现空行时的无缩进续行也算这一条
+          if (items.length && !mItem && pendingBlank === 0 && ind <= baseIndent) {
+            items[items.length - 1].lines.push(l);
+            i++;
+            continue;
+          }
+          break;
         }
 
         blocks.push({
           type: 'list',
           ordered: ordered,
           start: listStart,
-          items: items.map(function (it) { return { inline: parseInline(it.text) }; })
+          items: items.map(function (it) {
+            return { marker: it.marker, blocks: parseLines(it.lines) };
+          })
         });
         continue;
       }
@@ -573,6 +618,10 @@
       }
     }
 
+    // 嵌套块也要有 cid：renderBlock 直接读 b.cid，缺了会写出 cid="undefined"
+    for (var k = 0; k < blocks.length; k++) {
+      if (!blocks[k].cid) blocks[k].cid = 'n' + (++nid);
+    }
     return blocks;
   }
 
@@ -663,6 +712,36 @@
     }).join('');
   }
 
+  /**
+   * 渲染一组子块，并给每个块元素补上 data-src。
+   * 父级序列化时把子块当「原子」按 data-src 读回，光标遍历也同样按长度计，
+   * 这样嵌套结构在偏移模型里和图片/脚注引用是同一种东西。
+   */
+  function renderChildren(blocks) {
+    var holder = document.createElement('div');
+    holder.innerHTML = blocks.map(renderBlock).join('');
+    var out = [];
+    for (var i = 0; i < holder.children.length; i++) out.push(holder.children[i].outerHTML);
+    return out.join('');
+  }
+
+  /**
+   * 列表项内容。只有一段时直接铺行内内容（和旧版完全一致）；
+   * 多块条目时第一段也要包成 <p mdtype=paragraph>，否则 leafBlock() 只能定位到 li，
+   * 回车就会把整条（含子列表）拆散。
+   */
+  function renderItemChildren(blocks) {
+    if (!blocks.length) return '';
+    if (blocks.length === 1 && blocks[0].type === 'paragraph') {
+      return renderInline(blocks[0].inline);
+    }
+    if (blocks[0].type === 'paragraph') {
+      return '<p class="md-block md-li-para" mdtype="paragraph" cid="' + blocks[0].cid + '">' +
+        renderInline(blocks[0].inline) + '</p>' + renderChildren(blocks.slice(1));
+    }
+    return renderChildren(blocks);
+  }
+
   function renderBlock(b) {
     var cid = ' cid="' + b.cid + '"';
     switch (b.type) {
@@ -674,8 +753,14 @@
         return '<p class="md-block" mdtype="paragraph"' + cid + '>' + renderInline(b.inline) + '</p>';
 
       case 'blockquote':
+        // 只有一段时保持老结构（行内内容直接挂在 blockquote 里），
+        // 多段/含子块时才包一层子元素。
+        if (b.blocks.length === 1 && b.blocks[0].type === 'paragraph') {
+          return '<blockquote class="md-block" mdtype="blockquote" data-open="&gt; "' + cid + '>' +
+            renderInline(b.blocks[0].inline) + '</blockquote>';
+        }
         return '<blockquote class="md-block" mdtype="blockquote" data-open="&gt; "' + cid + '>' +
-          renderInline(b.inline) + '</blockquote>';
+          renderChildren(b.blocks) + '</blockquote>';
 
       case 'fences': {
         var lang = (b.lang || '').toLowerCase();
@@ -767,15 +852,16 @@
         return '<table class="md-block md-table" mdtype="table" data-align="' +
           escapeAttr(JSON.stringify(aligns)) + '"' + cid + '>' + thead + tbody + '</table>';
 
-      case 'list':
+      case 'list': {
         var tag = b.ordered ? 'ol' : 'ul';
         var startAttr = (b.ordered && b.start && b.start !== 1) ? ' start="' + b.start + '"' : '';
         var lis = b.items.map(function (it, idx) {
-          var marker = b.ordered ? (idx + 1) + '. ' : '- ';
+          var marker = it.marker || (b.ordered ? (idx + 1) + '. ' : '- ');
           return '<li mdtype="list_item" data-open="' + escapeAttr(marker) + '" data-close="">' +
-            renderInline(it.inline) + '</li>';
+            renderItemChildren(it.blocks) + '</li>';
         }).join('');
         return '<' + tag + ' class="md-block" mdtype="list"' + startAttr + cid + '>' + lis + '</' + tag + '>';
+      }
 
       default:
         return '<p class="md-block" mdtype="paragraph"' + cid + '></p>';
@@ -814,9 +900,20 @@
     if (!el || el.nodeType !== 1) return;
     var t = el.getAttribute('mdtype');
 
-    if (t === 'list') {
+    if (t === 'list' || t === 'blockquote') {
       for (var i = 0; i < el.children.length; i++) ensurePlaceholder(el.children[i]);
       return;
+    }
+    if (t === 'list_item') {
+      // 多块条目：子块各自补占位；单段条目（文本直接挂在 li 上）走下面的通用逻辑
+      var nested = false;
+      for (var j = 0; j < el.children.length; j++) {
+        if (el.children[j].hasAttribute('cid')) {
+          nested = true;
+          ensurePlaceholder(el.children[j]);
+        }
+      }
+      if (nested) return;
     }
     if (t === 'hr' || t === 'fences') return;
     if (el.textContent.length) return;
@@ -1209,8 +1306,25 @@
       case 'paragraph':
         return inlineRaw(el);
 
-      case 'blockquote':
-        return inlineRaw(el).split('\n').map(function (l) { return '> ' + l; }).join('\n');
+      case 'blockquote': {
+        // 只有带 cid 的子元素才算「块级子块」。行内内容（含硬换行 <br>）
+        // 直接挂在 blockquote 里的老结构要走 inlineRaw，否则 <br> 会被当成一个空块。
+        var kids = [];
+        for (var bi = 0; bi < el.children.length; bi++) {
+          if (el.children[bi].hasAttribute('cid')) kids.push(el.children[bi]);
+        }
+        if (!kids.length) {
+          return inlineRaw(el).split('\n').map(function (l) { return '> ' + l; }).join('\n');
+        }
+        var qout = [];
+        for (var qi = 0; qi < kids.length; qi++) {
+          var qsrc = blockRaw(kids[qi]);
+          if (!qsrc.trim()) continue;
+          if (qout.length) qout.push('>');
+          qsrc.split('\n').forEach(function (l) { qout.push(l ? '> ' + l : '>'); });
+        }
+        return qout.join('\n');
+      }
 
       case 'fences':
         return (el.dataset.fences || '```') + '\n' + el.textContent + '\n```';
@@ -1251,7 +1365,8 @@
         var lines = [];
         for (var i = 0; i < el.children.length; i++) {
           var li = el.children[i];
-          lines.push((ordered ? (start + i) + '. ' : '- ') + inlineRaw(li));
+          // 有序列表的编号以 start 为准（DOM 里的 data-open 是按 1 起的）
+          lines.push(liRaw(li, ordered ? (start + i) + '. ' : '- '));
         }
         return lines.join('\n');
       }
@@ -1267,6 +1382,45 @@
     return s;
   }
 
+  /**
+   * 列表项的源码：marker + 内容。子块（嵌套列表/引用/代码块）按 marker 宽度缩进写回，
+   * 否则重新解析时缩进就不对了。
+   */
+  function liRaw(li, fallbackMarker) {
+    var marker = fallbackMarker || li.getAttribute('data-open') || '- ';
+    var pad = repeat(' ', marker.length);
+    var parts = [];
+    var emitted = false;
+
+    for (var j = 0; j < li.childNodes.length; j++) {
+      var n = li.childNodes[j];
+      if (n.nodeType === 3) {
+        if (n.nodeValue) { parts.push(n.nodeValue); emitted = true; }
+        continue;
+      }
+      if (n.nodeType !== 1) continue;
+
+      if (n.hasAttribute('cid')) {
+        // 块级子元素：读实时 DOM 序列化（不能用渲染时快照的 data-src，
+        // 否则在嵌套列表里打字，改动会全部丢在旧快照里）。
+        // 空块跳过：Markdown 里没有「列表项内的空段落」这种表示，
+        // 硬写成一串空行只会让重新解析时对不上。
+        var bsrc = blockRaw(n);
+        if (!bsrc.trim()) continue;
+        parts.push((emitted ? '\n\n' : '') + bsrc);
+        emitted = true;
+      } else {
+        parts.push(inlineRaw(n));
+        emitted = true;
+      }
+    }
+
+    var body = parts.join('');
+    return marker + body.split('\n').map(function (l, k) {
+      return k === 0 ? l : (l ? pad + l : '');
+    }).join('\n');
+  }
+
   function getMarkdown() {
     var parts = [];
     for (var i = 0; i < write.children.length; i++) {
@@ -1279,6 +1433,9 @@
   // 7. 光标 <-> 源码偏移
   // =====================================================================
 
+  // 容器类型：自身不承载文本，往下找叶子
+  var CONTAINER_TYPES = ['list', 'blockquote', 'table'];
+
   function leafBlock() {
     var sel = window.getSelection();
     if (!sel || !sel.rangeCount) return null;
@@ -1286,8 +1443,14 @@
     var best = null;
 
     while (node && node !== write) {
-      if (node.nodeType === 1 && node.hasAttribute('mdtype')) best = node;
-      if (node.nodeType === 1 && node.hasAttribute('cid')) break;
+      if (node.nodeType === 1) {
+        var mt = node.getAttribute('mdtype');
+        // 只有叶子块能当 best；容器（列表/引用/表格）不行，
+        // 否则 li 没有 cid，往上走到 ul 时会把 best 覆盖成 ul，
+        // 回车就会把整个列表拆散。
+        if (mt && CONTAINER_TYPES.indexOf(mt) < 0) best = node;
+        if (node.hasAttribute('cid')) break;
+      }
       node = node.parentNode;
     }
     return best;
@@ -1329,6 +1492,13 @@
         return;
       }
       if (node.tagName === 'IMG') { pos += (node.getAttribute('data-src') || '').length; return; }
+
+      // 嵌套容器（列表 / 引用）：整体是一段源码，按长度跳过，不进去逐字数
+      var nt = node.getAttribute && node.getAttribute('mdtype');
+      if (nt === 'list' || nt === 'blockquote') {
+        pos += blockRaw(node).length;
+        return;
+      }
 
       // 其它原子（脚注引用）：按 data-src 的源码长度计
       if (node.hasAttribute && node.hasAttribute('data-src')) {
@@ -1436,6 +1606,13 @@
           return;
         }
         pos += ilen;
+        return;
+      }
+
+      // 嵌套容器：整段跳过（光标落到它前后，不进内部）
+      var nt2 = node.getAttribute && node.getAttribute('mdtype');
+      if (nt2 === 'list' || nt2 === 'blockquote') {
+        pos += blockRaw(node).length;
         return;
       }
 
@@ -2243,6 +2420,34 @@
     var head = src.slice(0, cut);
     var tail = src.slice(cut);
 
+    // 段落落在容器里（多块列表项 / 多段引用）：在容器内部拆成两段。
+    // 不能走下面「替换整个 top」的路径 —— 那会把外层列表/引用一起拆散。
+    if (leaf !== top && leaf.parentNode && leaf.parentNode.getAttribute &&
+        (leaf.parentNode.getAttribute('mdtype') === 'list_item' ||
+         leaf.parentNode.getAttribute('mdtype') === 'blockquote')) {
+      var pHead = document.createElement('p');
+      pHead.className = 'md-block md-li-para';
+      pHead.setAttribute('mdtype', 'paragraph');
+      pHead.setAttribute('cid', leaf.getAttribute('cid') || ('n' + (++nid)));
+      pHead.innerHTML = renderInline(parseInline(head));
+
+      var pTail = document.createElement('p');
+      pTail.className = 'md-block md-li-para';
+      pTail.setAttribute('mdtype', 'paragraph');
+      pTail.setAttribute('cid', 'n' + (++nid));
+      pTail.innerHTML = renderInline(parseInline(tail));
+
+      leaf.replaceWith(pHead, pTail);
+      padEmpties();
+      setCaretBySourceOffset(pTail, 0);
+      // 尾部为空（在段末回车）时不标脏：源码里没有「项内空段落」的表示，
+      // 一标脏画笔就会把这个空行抹掉，回车看起来就失效了。等用户真的输入
+      // 内容，input 事件会再标脏，那时才有东西可序列化。
+      if (tail.trim()) markDirty(top);
+      updateWordCount();
+      return;
+    }
+
     // 标题回车后新行是普通段落
     var headType = mt;
     var tailType = (mt === 'heading' || mt === 'blockquote') ? 'paragraph' : mt;
@@ -2252,7 +2457,7 @@
       headBlock = { type: 'heading', depth: parseInt(top.dataset.depth || '1', 10), inline: [] };
     }
     if (mt === 'blockquote' && headBlock.type !== 'blockquote') {
-      headBlock = { type: 'blockquote', inline: [] };
+      headBlock = { type: 'blockquote', blocks: [{ type: 'paragraph', inline: [] }] };
     }
 
     var tailBlock = parseBlocks(tail)[0] || { type: 'paragraph', inline: [] };

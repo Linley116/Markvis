@@ -215,6 +215,23 @@ blockquote p { margin: 0; }
 ul, ol { margin: 0 0 1em; padding-left: 1.6em; }
 li { margin: .2em 0; }
 
+/* 嵌套块（T4）：列表项 / 引用里的子块不要继承正文段落的上下外边距 */
+li[mdtype="list_item"] > [cid],
+blockquote > [cid] {
+  margin: .35em 0 .4em;
+}
+li[mdtype="list_item"] > [cid]:last-child,
+blockquote > [cid]:last-child {
+  margin-bottom: 0;
+}
+li[mdtype="list_item"] > [cid]:first-child,
+blockquote > [cid]:first-child {
+  margin-top: 0;
+}
+/* 条目里第一段（多块条目才有包裹元素）*/
+p.md-li-para { margin: 0 0 .35em; }
+p.md-li-para:last-child { margin-bottom: 0; }
+
 hr {
   border: 0;
   border-top: 1px solid var(--border);

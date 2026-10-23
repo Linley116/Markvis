@@ -172,7 +172,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 101 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 111 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 68 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
@@ -182,7 +182,7 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 已知限制
 
-- 解析器是扁平的：没有嵌套块（列表项里放不了引用或代码块）。
+- 嵌套块已经支持（列表嵌列表、条目里放代码块/引用、引用里多段）。仍然是扁平的：表格不能嵌套，也不支持块级 HTML。
 - 表格单元格里不能有真正的换行。
 - 撤销是快照式的（每步存整篇 + 光标），所以能跨模式、跨重解析；代价是一步会还原整篇文档，超大文件上不如增量方案省。
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
