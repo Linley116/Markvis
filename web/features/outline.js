@@ -42,7 +42,7 @@
     for (var i = 0; i < heads.length; i++) {
       var h = heads[i];
       var level = parseInt(h.tagName.charAt(1), 10);
-      var text = h.textContent.trim() || '(空标题)';
+      var text = plainText(h).trim() || '(空标题)';
       html += '<a class="mf-outline-item" data-idx="' + i + '" data-level="' + level + '"' +
         ' style="padding-left:' + (10 + (level - 1) * 14) + 'px"' +
         ' title="' + esc(text) + '">' + esc(text) + '</a>';
@@ -53,6 +53,16 @@
 
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** 标题文本要剔除 .md-meta（标记是隐藏的真实节点，不该出现在大纲里） */
+  function plainText(el) {
+    var clone = el.cloneNode(true);
+    var metas = clone.querySelectorAll('.md-meta');
+    for (var i = 0; i < metas.length; i++) {
+      if (metas[i].parentNode) metas[i].parentNode.removeChild(metas[i]);
+    }
+    return clone.textContent;
   }
 
   function jump(idx) {

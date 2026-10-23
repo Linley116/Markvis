@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-87%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-93%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -33,7 +33,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~5,600 lines: 1,200 Swift, 3,000 web core, 500 features, 800 tests.
+The whole editor is ~5,700 lines: 1,200 Swift, 3,100 web core, 500 features, 830 tests.
 
 ### Features
 
@@ -41,9 +41,9 @@ The whole editor is ~5,600 lines: 1,200 Swift, 3,000 web core, 500 features, 800
 |---|---|
 | **Editing** | Paragraphs, H1–H6, quotes, ordered/unordered lists, fenced code, tables, horizontal rules, YAML front matter, GFM soft/hard line breaks |
 | **Inline** | Bold, italic, inline code, strikethrough, links, images, bracket/quote auto-pairing |
-| **Live preview** | Lossless DOM: every inline element remembers its source markers, so Markdown is reconstructed from the DOM, not from a shadow buffer |
+| **Live preview** | Lossless DOM: inline elements hold their source markers as real, hidden text nodes — Markdown is reconstructed from the DOM, not a shadow buffer |
 | **200 ms brush** | Only dirty blocks get re-rendered; identical HTML means zero DOM writes |
-| **`expand`** | Move the caret into `**bold**` and the markers float back into view |
+| **`expand`** | Move the caret into `**bold**`, the markers float back into view — and they are editable: delete one `*`, arrow through them, type between them |
 | **Source mode** | `Cmd+/` round-trips between rendered and raw text |
 | **Multi-document** | One document per window, native macOS tab groups (`Cmd+T`), opening a file never clobbers the current one |
 | **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-aware column widths |
@@ -143,7 +143,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 47 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 53 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 40 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
@@ -153,7 +153,6 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 ### Known limitations
 
-- Inline markers are rendered with CSS pseudo-elements: **visible but not directly editable**. Use the shortcuts to toggle formatting.
 - The parser is flat: no nested blocks (a list item cannot contain a quote or a code block).
 - Table cells cannot contain a real line break.
 - Undo is browser-native in live mode and textarea-native in source mode; they are not unified.
@@ -163,7 +162,7 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — completed work is struck through, so what is left is what is not crossed out. Short version: editable inline markers, footnotes/TOC, math + Mermaid, unified undo stack, nested blocks.
+See [ROADMAP.md](ROADMAP.md) — completed work is struck through, so what is left is what is not crossed out. Short version: footnotes/TOC, math + Mermaid, unified undo stack, nested blocks.
 
 ### License
 

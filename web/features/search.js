@@ -82,7 +82,16 @@
     var caseSensitive = caseChk && caseChk.checked;
     var needle = caseSensitive ? query : query.toLowerCase();
 
-    var walker = document.createTreeWalker(write, NodeFilter.SHOW_TEXT, null);
+    // 跳过 .md-meta：标记是隐藏的真实文本节点，不该被搜到/替换到
+    var walker = document.createTreeWalker(write, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        var p = n.parentNode;
+        if (p && p.classList && p.classList.contains('md-meta')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
     var node;
 
     while ((node = walker.nextNode())) {

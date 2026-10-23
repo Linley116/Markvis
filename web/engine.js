@@ -5,9 +5,10 @@
  *                                                  │
  *   Markdown  ◄──rawText───────────────────────────┘
  *
- * 权威表示是「无损 DOM」：每个行内元素用 data-open / data-close 记住自己的
- * 源码标记，块级元素用 mdtype / cid 记住类型与身份。用户直接编辑 DOM，
- * 由 200ms 画笔把脏块反解析回源码、必要时重渲染。
+ * 权威表示是「无损 DOM」：每个行内元素把源码标记渲染成真实的 `.md-meta`
+ * 文本节点（默认 display:none，光标进入时由 .md-expand 显形），块级元素
+ * 用 mdtype / cid 记住类型与身份。用户直接编辑 DOM，由 200ms 画笔把脏块
+ * 反解析回源码、必要时重渲染。
  */
 
 (function () {
@@ -459,6 +460,15 @@
   // 5. 渲染：Node 树 -> HTML
   // =====================================================================
 
+  /**
+   * 行内标记渲染成真实文本节点（对应 Typora 的 .md-meta）。
+   * 默认 display:none；光标进入所属 .md-inline 时由 .md-expand 显形。
+   * 这样标记既能被看见，也能被方向键穿过、被 Backspace 删掉。
+   */
+  function metaHTML(side, text) {
+    return '<span class="md-meta" data-side="' + side + '">' + escapeHtml(text) + '</span>';
+  }
+
   function renderInline(nodes) {
     return nodes.map(function (n) {
       switch (n.type) {
@@ -473,29 +483,30 @@
             : '\n';
 
         case 'strong':
-          return '<span class="md-inline" mdtype="strong" data-open="' + escapeAttr(n.mark || '**') +
-            '" data-close="' + escapeAttr(n.mark || '**') + '">' + renderInline(n.children) + '</span>';
+          return '<span class="md-inline" mdtype="strong">' + metaHTML('open', n.mark || '**') +
+            renderInline(n.children) + metaHTML('close', n.mark || '**') + '</span>';
 
         case 'em':
-          return '<span class="md-inline" mdtype="em" data-open="' + escapeAttr(n.mark || '*') +
-            '" data-close="' + escapeAttr(n.mark || '*') + '">' + renderInline(n.children) + '</span>';
+          return '<span class="md-inline" mdtype="em">' + metaHTML('open', n.mark || '*') +
+            renderInline(n.children) + metaHTML('close', n.mark || '*') + '</span>';
 
         case 'code':
-          return '<span class="md-inline" mdtype="code" data-open="' + escapeAttr(n.mark || '`') +
-            '" data-close="' + escapeAttr(n.mark || '`') + '"><code>' + escapeHtml(n.text) + '</code></span>';
+          return '<span class="md-inline" mdtype="code">' + metaHTML('open', n.mark || '`') +
+            '<code>' + escapeHtml(n.text) + '</code>' + metaHTML('close', n.mark || '`') + '</span>';
 
         case 'del':
-          return '<span class="md-inline" mdtype="del" data-open="~~" data-close="~~"><del>' +
-            renderInline(n.children) + '</del></span>';
+          return '<span class="md-inline" mdtype="del">' + metaHTML('open', '~~') +
+            '<del>' + renderInline(n.children) + '</del>' + metaHTML('close', '~~') + '</span>';
 
         case 'link':
-          return '<span class="md-inline" mdtype="link" data-open="[" data-close="](' +
-            escapeAttr(n.href) + ')"><a href="' + escapeAttr(n.href) + '">' +
-            renderInline(n.children) + '</a></span>';
+          return '<span class="md-inline" mdtype="link">' + metaHTML('open', '[') +
+            '<a href="' + escapeAttr(n.href) + '">' + renderInline(n.children) + '</a>' +
+            metaHTML('close', '](' + n.href + ')') + '</span>';
 
         case 'autolink':
-          return '<span class="md-inline" mdtype="autolink" data-open="&lt;" data-close="&gt;">' +
-            '<a href="' + escapeAttr(n.href) + '">' + escapeHtml(n.href) + '</a></span>';
+          return '<span class="md-inline" mdtype="autolink">' + metaHTML('open', '<') +
+            '<a href="' + escapeAttr(n.href) + '">' + escapeHtml(n.href) + '</a>' +
+            metaHTML('close', '>') + '</span>';
 
         case 'image':
           return '<img class="md-img" src="' + escapeAttr(resolveImgSrc(n.src)) + '" alt="' + escapeAttr(n.alt) +
@@ -692,14 +703,8 @@
         continue;
       }
 
-      // 带标记的元素：open + 内容 + close
-      if (n.hasAttribute('data-open')) {
-        out += n.getAttribute('data-open');
-        out += inlineRaw(n);
-        out += n.getAttribute('data-close') || '';
-        continue;
-      }
-
+      // .md-meta 里的标记是真实文本节点，递归即可读回；
+      // 其余行内元素（code / a / del）同样递归。
       out += inlineRaw(n);
     }
     return out;
@@ -895,18 +900,15 @@
       }
       if (node.tagName === 'IMG') { pos += (node.getAttribute('data-src') || '').length; return; }
 
-      if (node.hasAttribute('data-open')) {
-        var open = node.getAttribute('data-open') || '';
-        var close = node.getAttribute('data-close') || '';
-        pos += open.length;
-
-        if (node === range.startContainer) { done = true; return; }
-
-        for (var i = 0; i < node.childNodes.length; i++) {
-          walk(node.childNodes[i]);
+      // 标记是真实文本节点，偏移天然对齐：普通递归即可，
+      // 不再需要按 data-open / data-close 补长度。
+      if (node === range.startContainer) {
+        // 光标停在元素本身（两个子节点之间）：只累加插入点之前的子节点
+        for (var k = 0; k < range.startOffset && k < node.childNodes.length; k++) {
+          walk(node.childNodes[k]);
           if (done) return;
         }
-        pos += close.length;
+        done = true;
         return;
       }
 
@@ -952,7 +954,13 @@
       if (node.nodeType === 3) {
         var raw = node.nodeValue;
         var clean = raw.replace(/\u200b/g, '');
-        if (target <= pos + clean.length) {
+        // 标记节点用「严格小于」：偏移正好落在标记末尾时，说明用户指的是
+        // 内容开头，应该落到下一个文本节点里。否则光标会停在隐藏标记的末尾，
+        // 按左方向键会直接跳出整个行内元素（Chrome 的标记内部最左位置不可达）。
+        var inMeta = node.parentNode && node.parentNode.classList &&
+          node.parentNode.classList.contains('md-meta');
+        var hit = inMeta ? target < pos + clean.length : target <= pos + clean.length;
+        if (hit && clean.length > 0) {
           // 把「去零宽后的偏移」映射回真实字符偏移
           var want = target - pos;
           var acc = 0;
@@ -993,28 +1001,8 @@
         return;
       }
 
-      if (node.hasAttribute('data-open')) {
-        var open = node.getAttribute('data-open') || '';
-        var close = node.getAttribute('data-close') || '';
-
-        if (target < pos + open.length) {
-          // 落到标记内部：把光标放到内容开头
-          var ft = firstTextNode(node);
-          if (ft) { placeCaret(ft, 0); placed = true; }
-          return;
-        }
-        pos += open.length;
-
-        for (var i = 0; i < node.childNodes.length; i++) {
-          walk(node.childNodes[i]);
-          if (placed) return;
-        }
-        pos += close.length;
-        return;
-      }
-
-      for (var j = 0; j < node.childNodes.length; j++) {
-        walk(node.childNodes[j]);
+      for (var i = 0; i < node.childNodes.length; i++) {
+        walk(node.childNodes[i]);
         if (placed) return;
       }
     }
@@ -1025,10 +1013,10 @@
     }
 
     // 兜底：块尾。若最后是一个行内元素，直接 selectNodeContents+collapse
-    // 会被浏览器解释成「元素内部末尾」，后续输入被吸进该元素里。
-    // 这里显式补一个零宽锚点，把插入点钉在元素外面。
+    // 会被浏览器解释成「元素内部末尾」，后续输入被吸进该元素（甚至落进
+    // 隐藏的 .md-meta 里）。这里显式补一个零宽锚点，把插入点钉在元素外面。
     var last = root.lastChild;
-    if (last && last.nodeType === 1 && last.hasAttribute('data-open')) {
+    if (last && last.nodeType === 1 && last.classList && last.classList.contains('md-inline')) {
       var anchor = document.createElement('span');
       anchor.className = 'mf-anchor';
       anchor.textContent = '\u200b';
@@ -1040,6 +1028,7 @@
       var asel = window.getSelection();
       asel.removeAllRanges();
       asel.addRange(ar);
+      updateExpand();
       return;
     }
 
@@ -1049,6 +1038,8 @@
     var sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(r);
+    // 标记可能是隐藏的：光标若落进 .md-meta，先让所属行内元素展开
+    updateExpand();
   }
 
   // =====================================================================
@@ -1218,16 +1209,26 @@
     var sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
 
-    var prev = write.querySelectorAll('.md-expand');
-    for (var i = 0; i < prev.length; i++) prev[i].classList.remove('md-expand');
-
+    // 先算出该展开谁，再统一收拾别的元素 —— 不能「先全删再加回」。
+    // 删了再加会让 .md-meta 在同一帧里 display:none → inline 闪一次，
+    // Chrome 的插入符位置缓存会因此失效，方向键会整块跳过标记。
+    var target = null;
     var node = sel.getRangeAt(0).startContainer;
     while (node && node !== write) {
       if (node.nodeType === 1 && node.classList && node.classList.contains('md-inline')) {
-        node.classList.add('md-expand');
-        return;
+        target = node;
+        break;
       }
       node = node.parentNode;
+    }
+
+    var prev = write.querySelectorAll('.md-expand');
+    for (var i = 0; i < prev.length; i++) {
+      if (prev[i] !== target) prev[i].classList.remove('md-expand');
+    }
+
+    if (target && !target.classList.contains('md-expand')) {
+      target.classList.add('md-expand');
     }
   }
 
@@ -2250,7 +2251,7 @@
       '#mf-page-root { width: ' + printContentSize().w + 'px; }',
       '.mf-page { overflow: hidden; }',
       '.mf-page > :first-child { margin-top: 0 !important; }',
-      '.md-inline[data-open]::before, .md-inline[data-close]::after { display: none !important; }',
+      '.md-meta { display: none !important; }',
       '.md-inline.md-expand { background: none !important; }',
       '.mf-anchor { display: none !important; }',
       // 打印时不允许横向滚动：代码块必须折行，否则右侧被裁掉
@@ -2297,7 +2298,7 @@
       'html, body { height: auto !important; overflow: visible !important; background: #fff !important; }\n' +
       '#scroll { height: auto !important; overflow: visible !important; }\n' +
       '.mf-anchor { display: none !important; }\n' +
-      '.md-inline[data-open]::before, .md-inline[data-close]::after { display: none !important; }\n' +
+      '.md-meta { display: none !important; }\n' +
       '</style>\n' +
       '</head>\n' +
       '<body class="mf-export-standalone">\n' +

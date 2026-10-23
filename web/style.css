@@ -321,20 +321,18 @@ a:hover { text-decoration: underline; }
   vertical-align: bottom;
 }
 
-/* 标记符：默认隐藏，光标进入时（.md-expand）显现 —— 对应 Typora 的 expand 行为 */
-.md-inline[data-open]::before,
-.md-inline[data-close]::after {
+/* 标记符：渲染成真实文本节点（.md-meta），默认隐藏，光标进入时（.md-expand）
+   显现 —— 对应 Typora 的 expand 行为。因为是真实节点，能删、能被方向键穿过。 */
+.md-meta {
   color: var(--mark);
   display: none;
   font-weight: 400;
   font-style: normal;
   white-space: pre;
+  user-select: text;
 }
-.md-inline[data-open]::before { content: attr(data-open); }
-.md-inline[data-close]::after { content: attr(data-close); }
 
-.md-inline.md-expand[data-open]::before,
-.md-inline.md-expand[data-close]::after { display: inline; }
+.md-inline.md-expand > .md-meta { display: inline; }
 
 .md-inline.md-expand { background: rgba(65,131,196,.06); border-radius: 2px; }
 

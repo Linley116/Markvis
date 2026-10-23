@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-87%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-93%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -34,7 +34,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 5,600 行：Swift 1,200 行、Web 内核 3,000 行、功能模块 500 行、测试 800 行。
+整个编辑器约 5,700 行：Swift 1,200 行、Web 内核 3,100 行、功能模块 500 行、测试 830 行。
 
 ### 功能
 
@@ -42,9 +42,9 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 |---|---|
 | **块级** | 段落、H1–H6、引用、有序/无序列表、围栏代码、表格、分隔线、YAML front matter、GFM 软/硬换行 |
 | **行内** | 粗体、斜体、行内代码、删除线、链接、图片、括号/引号自动配对 |
-| **实时预览** | 无损 DOM：每个行内元素都记着自己的源码标记，Markdown 从 DOM 反推，不靠影子缓冲区 |
+| **实时预览** | 无损 DOM：行内元素的源码标记是**真实的隐藏文本节点**，Markdown 从 DOM 反推，不靠影子缓冲区 |
 | **200ms 画笔** | 只重绘脏块；块内 HTML 相同就完全不碰 DOM |
-| **`expand`** | 光标移进 `**粗体**`，标记自动浮出来 |
+| **`expand`** | 光标移进 `**粗体**`，标记浮出来 —— 而且可编辑：能删掉一个 `*`、能用方向键穿过去、能在中间插字 |
 | **源码模式** | `Cmd+/` 在渲染视图和原文之间双向切换 |
 | **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；打开新文件不会顶掉当前文档 |
 | **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、按 CJK 宽度算列宽 |
@@ -144,7 +144,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 47 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 53 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 40 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
@@ -154,7 +154,6 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 已知限制
 
-- 行内标记用 CSS 伪元素显示：**看得见但不能直接编辑**，请用快捷键切换格式。
 - 解析器是扁平的：没有嵌套块（列表项里放不了引用或代码块）。
 - 表格单元格里不能有真正的换行。
 - 撤销在实时模式下走浏览器、源码模式下走 textarea，两边没有统一。
@@ -164,7 +163,7 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 路线图
 
-见 [ROADMAP.md](ROADMAP.md) —— 已完成项用删除线划掉，没划掉的就是待办。简版：行内标记可编辑、脚注/TOC、数学与 Mermaid、统一撤销栈、嵌套块。
+见 [ROADMAP.md](ROADMAP.md) —— 已完成项用删除线划掉，没划掉的就是待办。简版：脚注/TOC、数学与 Mermaid、统一撤销栈、嵌套块。
 
 ### 许可证
 

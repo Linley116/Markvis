@@ -59,18 +59,26 @@ function check(name, cond, extra) {
   check('高亮不改动源码文本', /const pipeline/.test(hl.raw || ''), hl.raw);
 
   const inline = await page.evaluate(() => {
+    const plain = el => {
+      const c = el.cloneNode(true);
+      c.querySelectorAll('.md-meta').forEach(m => m.remove());
+      return c.textContent;
+    };
     const s = document.querySelector('#write span[mdtype="strong"]');
     const c = document.querySelector('#write span[mdtype="code"]');
+    const metas = s ? [...s.querySelectorAll('.md-meta')] : [];
     return {
-      strongOpen: s && s.getAttribute('data-open'),
-      strongText: s && s.textContent,
-      codeOpen: c && c.getAttribute('data-open'),
-      codeInner: c && c.textContent
+      strongMarks: metas.map(m => m.textContent),
+      strongText: s && plain(s),
+      strongMetaDisplay: metas[0] ? getComputedStyle(metas[0]).display : null,
+      codeMarks: c ? [...c.querySelectorAll('.md-meta')].map(m => m.textContent) : [],
+      codeInner: c && c.querySelector('code').textContent
     };
   });
-  check('strong 的 data-open 是 **', inline.strongOpen === '**', JSON.stringify(inline.strongOpen));
+  check('strong 的标记是两个真实 .md-meta 节点', inline.strongMarks.length === 2 && inline.strongMarks[0] === '**' && inline.strongMarks[1] === '**', JSON.stringify(inline.strongMarks));
+  check('标记默认隐藏', inline.strongMetaDisplay === 'none', inline.strongMetaDisplay);
   check('strong 内容正确', /Typora 架构/.test(inline.strongText || ''), inline.strongText);
-  check('code 的 data-open 是 `', inline.codeOpen === '`');
+  check('code 的标记是 `', inline.codeMarks.length === 2 && inline.codeMarks[0] === '`', JSON.stringify(inline.codeMarks));
 
   console.log('\n[3] DOM -> Markdown 往返');
   const md = await page.evaluate(() => window.__getMarkdown());
@@ -101,10 +109,14 @@ function check(name, cond, extra) {
 
     const spans = Array.from(p.querySelectorAll('span[mdtype="strong"]'));
     const last = spans[spans.length - 1];
+    const plain = el => {
+      const c = el.cloneNode(true);
+      c.querySelectorAll('.md-meta').forEach(m => m.remove());
+      return c.textContent;
+    };
     return {
       count: spans.length,
-      text: last && last.textContent,
-      open: last && last.getAttribute('data-open'),
+      text: last && plain(last),
       markdown: window.__getMarkdown()
     };
   });
@@ -295,6 +307,77 @@ function check(name, cond, extra) {
   check('src 解析为 file:// 绝对地址', img.src === 'file:///tmp/doc/assets/a.png', img.src);
   check('data-src 保留相对路径', img.data === '![](assets/a.png)', img.data);
   check('序列化仍是相对路径', img.md === '![](assets/a.png)', img.md);
+
+  console.log('\n[2.5] 行内标记可编辑（T1）');
+  const expandState = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', 'a **bold** z', 't');
+    await wait(80);
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    const s = p.querySelector('span[mdtype="strong"]');
+
+    // 光标进内容（offset 2 = 开头 ** 之后）
+    window.MF.setCaretBySourceOffset(s, 2);
+    await wait(60);
+    const metas = [...s.querySelectorAll('.md-meta')];
+    return {
+      expanded: s.classList.contains('md-expand'),
+      displays: metas.map(m => getComputedStyle(m).display),
+      marks: metas.map(m => m.textContent)
+    };
+  });
+  check('光标进入后标记显现（.md-expand）', expandState.expanded === true, JSON.stringify(expandState));
+  check('两个标记都变成 inline', expandState.displays.join(',') === 'inline,inline', JSON.stringify(expandState.displays));
+
+  await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', 'a **bold** z', 't');
+    await wait(80);
+    const write = document.getElementById('write');
+    write.focus();
+    const s = write.querySelector('span[mdtype="strong"]');
+    window.MF.setCaretBySourceOffset(s, 1);   // 落在开标记的第一个 * 之后
+    await wait(60);
+  });
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(500);
+  const afterDelete = await page.evaluate(() => window.__getMarkdown());
+  check('能删掉单个 *，源码随之变化', afterDelete === 'a *bold** z', JSON.stringify(afterDelete));
+
+  const arrow = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', 'a **bold** z', 't');
+    await wait(80);
+    const write = document.getElementById('write');
+    write.focus();
+    const s = write.querySelector('span[mdtype="strong"]');
+    window.MF.setCaretBySourceOffset(s, 2);   // 内容开头（不是标记末尾）
+    await wait(60);
+    return true;
+  });
+  await page.keyboard.press('ArrowLeft');
+  const arrowState = await page.evaluate(() => {
+    const sel = window.getSelection();
+    const n = sel.anchorNode;
+    const meta = n && n.parentNode && n.parentNode.classList && n.parentNode.classList.contains('md-meta');
+    return { inMeta: !!meta, offset: sel.anchorOffset };
+  });
+  check('方向键能穿进标记内部', arrowState.inMeta === true, JSON.stringify(arrowState));
+
+  const tail = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window.__loadContent('', 'a **b**', 't');
+    await wait(80);
+    const write = document.getElementById('write');
+    write.focus();
+    const p = write.querySelector('p[mdtype="paragraph"]');
+    window.MF.setCaretBySourceOffset(p, 7);   // 块尾，正好在 **b** 之后
+    await wait(60);
+    document.execCommand('insertText', false, 'X');
+    await wait(500);
+    return window.__getMarkdown();
+  });
+  check('块尾输入不会被吸进行内元素', tail === 'a **b**X', JSON.stringify(tail));
 
   console.log('\n[8] 运行时错误');
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
