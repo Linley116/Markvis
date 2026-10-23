@@ -238,8 +238,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(editItem)
         let editMenu = NSMenu(title: L10n.t("Edit", "编辑"))
         editItem.submenu = editMenu
-        editMenu.addItem(withTitle: L10n.t("Undo", "撤销"), action: Selector(("undo:")), keyEquivalent: "z")
-        let redo = editMenu.addItem(withTitle: L10n.t("Redo", "重做"), action: Selector(("redo:")), keyEquivalent: "Z")
+        // 撤销/重做交给 web 层的统一撤销栈（T3）：实时与源码模式共用一份历史。
+        // 保留键等效，AppKit 会吃掉按键并派发到这里的 action，不会重复触发 webview 的监听。
+        editMenu.addItem(withTitle: L10n.t("Undo", "撤销"), action: #selector(undoAction(_:)), keyEquivalent: "z")
+        let redo = editMenu.addItem(withTitle: L10n.t("Redo", "重做"), action: #selector(redoAction(_:)), keyEquivalent: "Z")
         redo.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(.separator())
         editMenu.addItem(withTitle: L10n.t("Cut", "剪切"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
@@ -369,6 +371,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleCode(_ sender: Any?) { js?("window.__cmd('code')") }
     @objc private func toggleSourceMode(_ sender: Any?) { js?("window.__cmd('toggleSource')") }
     @objc private func toggleSpell(_ sender: Any?) { js?("window.__cmd('toggleSpell')") }
+    @objc private func undoAction(_ sender: Any?) { js?("window.__cmd('undo')") }
+    @objc private func redoAction(_ sender: Any?) { js?("window.__cmd('redo')") }
     @objc private func openThemeFolder(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.openFolder()") }
     @objc private func reloadThemes(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.reload()") }
     @objc private func showFind(_ sender: Any?) { js?("window.MFSearch && window.MFSearch.show()") }

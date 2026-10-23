@@ -1662,6 +1662,211 @@
   }, 200);
 
   // =====================================================================
+  // 8.5 统一撤销栈（T3）
+  //
+  // 原来实时模式走浏览器的 execCommand 历史、源码模式走 textarea 自己的历史，
+  // 两者互不相通：切一次模式，之前的编辑就再也撤不回来
+  // （实测：实时里输入 A → 切源码输入 B → 连按两次 Cmd+Z 只撤掉 B，A 永远留下）。
+  //
+  // 换成自己的快照栈：
+  //   - 实时模式快照 = 整篇 markdown + 光标（块序号 / 块内路径 / 块内源码偏移）
+  //   - 源码模式快照 = textarea 全文 + 选区
+  //   - 撤销到另一条模式的快照时，先切过去再写入内容，所以跨模式也能撤
+  //   - 同模式 800ms 内的连续输入合并成一步（手感上「撤销一个词」而不是逐字符）
+  // =====================================================================
+
+  var undoStack = { items: [], bytes: 0 };
+  var redoStack = { items: [], bytes: 0 };
+  var UNDO_LIMIT = 200;                 // 最多 200 步
+  var UNDO_BYTES = 3 * 1024 * 1024;     // 快照总字符上限，超出丢最旧的
+  var GROUP_MS = 800;                   // 连续输入合并窗口
+  var lastGroup = null;                 // { mode, at }
+  var suppressAutoPush = false;         // 程序化改动期间，beforeinput 不重复压栈
+  var lastCmdUndoAt = 0;
+
+  function stackPush(st, s) {
+    st.items.push(s);
+    st.bytes += (s.text || '').length;
+    while (st.items.length > UNDO_LIMIT || (st.bytes > UNDO_BYTES && st.items.length > 8)) {
+      var dropped = st.items.shift();
+      st.bytes -= (dropped.text || '').length;
+    }
+  }
+
+  function stackPop(st) {
+    var s = st.items.pop();
+    if (s) st.bytes -= (s.text || '').length;
+    return s;
+  }
+
+  function stackClear(st) { st.items.length = 0; st.bytes = 0; }
+
+  function leafPath(leaf, top) {
+    var path = [];
+    var node = leaf;
+    while (node && node !== top) {
+      var parent = node.parentNode;
+      if (!parent) return [];
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes, node));
+      node = parent;
+    }
+    return path;
+  }
+
+  function leafFromPath(top, path) {
+    var node = top;
+    for (var i = 0; i < path.length; i++) {
+      if (!node || !node.childNodes) return null;
+      node = node.childNodes[path[i]];
+    }
+    return (node && node.nodeType === 1 && node.hasAttribute('mdtype')) ? node : null;
+  }
+
+  /** 取一份当前状态的快照 */
+  function snapshot() {
+    if (sourceMode) {
+      return {
+        mode: 'source',
+        text: source.value,
+        start: source.selectionStart,
+        end: source.selectionEnd
+      };
+    }
+    var caret = null;
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      var leaf = leafBlock();
+      var top = topBlockOf(sel.getRangeAt(0).startContainer);
+      if (leaf && top) {
+        caret = {
+          block: Array.prototype.indexOf.call(write.children, top),
+          path: leafPath(leaf, top),
+          offset: caretSourceOffset(leaf)
+        };
+      }
+    }
+    return { mode: 'live', text: getMarkdown(), caret: caret };
+  }
+
+  /** 改动之前调用：压一步撤销。force=true 时不与上一步合并 */
+  function pushUndo(force) {
+    if (composing) return;
+    var s = snapshot();
+    var now = Date.now();
+
+    if (!force && lastGroup && lastGroup.mode === s.mode && now - lastGroup.at < GROUP_MS) {
+      lastGroup.at = now;              // 合并进上一步，保留最早的「改动前」状态
+      return;
+    }
+    stackPush(undoStack, s);
+    stackClear(redoStack);
+    lastGroup = { mode: s.mode, at: now };
+  }
+
+  /** 程序化改动（回车、自动配对、Cmd+B、表格操作、插图片）外包一层 */
+  function programEdit(fn) {
+    pushUndo(true);
+    suppressAutoPush = true;
+    try {
+      fn();
+    } finally {
+      setTimeout(function () { suppressAutoPush = false; }, 0);
+    }
+  }
+
+  function applySnapshot(s) {
+    var keepScroll = scroll.scrollTop;
+
+    if (s.mode === 'source') {
+      if (!sourceMode) {
+        sourceMode = true;
+        write.style.display = 'none';
+        source.style.display = 'block';
+        modeEl.textContent = 'Source';
+      }
+      source.value = s.text;
+      try {
+        source.selectionStart = s.start;
+        source.selectionEnd = s.end;
+      } catch (e) {}
+      source.focus();
+    } else {
+      if (sourceMode) {
+        source.value = s.text;
+        sourceMode = false;
+        source.style.display = 'none';
+        write.style.display = 'block';
+        modeEl.textContent = 'Live';
+        loadMarkdown(source.value);
+      } else {
+        loadMarkdown(s.text);
+      }
+      if (s.caret) {
+        var top = write.children[s.caret.block];
+        if (top) {
+          var leaf = leafFromPath(top, s.caret.path) || top;
+          setCaretBySourceOffset(leaf, s.caret.offset);
+        }
+      }
+      write.focus();
+    }
+
+    setEdited(true);
+    scroll.scrollTop = keepScroll;
+  }
+
+  function undo() {
+    if (composing) return;
+    if (!undoStack.items.length) return;
+    var cur = snapshot();
+    var entry = stackPop(undoStack);
+    stackPush(redoStack, cur);
+    lastGroup = null;
+    applySnapshot(entry);
+  }
+
+  function redo() {
+    if (composing) return;
+    if (!redoStack.items.length) return;
+    var cur = snapshot();
+    var entry = stackPop(redoStack);
+    stackPush(undoStack, cur);
+    lastGroup = null;
+    applySnapshot(entry);
+  }
+
+  // 输入（含退格、粘贴文本、输入法）在 DOM 变化之前拦一道
+  write.addEventListener('beforeinput', function () {
+    if (suppressAutoPush) return;
+    pushUndo(false);
+  });
+  source.addEventListener('beforeinput', function () {
+    if (suppressAutoPush) return;
+    pushUndo(false);
+  });
+
+  // Cmd+Z / Cmd+Shift+Z：两种模式都走这一份栈。
+  // 原生 app 里这两个键由「编辑」菜单的同名项处理（走 __cmd），
+  // 这里兜住浏览器/调试场景；两者不会同时触发（菜单吃掉按键后不会派发到 webview）。
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'z' && e.key !== 'Z') return;
+    if (!(e.metaKey || e.ctrlKey)) return;
+
+    var t = e.target;
+    var inEditor = !t || t === document.body || t === write || t === source ||
+      (t.nodeType === 1 && (write.contains(t) || source.contains(t)));
+    if (!inEditor) return;                       // 查找框 / 公式源码框不接管
+
+    // 原生 app 里这个键由「编辑」菜单处理（走 __cmd）；万一按键还是派发到了
+    // webview，别把同一次操作做两遍。
+    if (Date.now() - lastCmdUndoAt < 200) return;
+
+    e.preventDefault();
+    if (e.shiftKey) redo();
+    else undo();
+  });
+
+  // =====================================================================
   // 9. expand：光标进入行内元素时显现其源码标记
   // =====================================================================
 
@@ -1771,7 +1976,7 @@
 
     e.preventDefault();
     var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-    document.execCommand('insertText', false, text);
+    programEdit(function () { document.execCommand('insertText', false, text); });
   });
 
   /** 把剪贴板里的图片交给原生落盘，再插入相对路径 */
@@ -1786,9 +1991,11 @@
           bridge.callHandler('app.log', 'image save failed (document has no path?)');
           return;
         }
-        document.execCommand('insertText', false, '![](' + rel + ')');
-        markDirtyFromCaret();
-        setEdited(true);
+        programEdit(function () {
+          document.execCommand('insertText', false, '![](' + rel + ')');
+          markDirtyFromCaret();
+          setEdited(true);
+        });
       });
     };
     reader.readAsDataURL(file);
@@ -1826,6 +2033,7 @@
   }
 
   function moveCell(cell, dir) {
+    programEdit(function () {
     var table = cell.closest('table');
     if (!table) return;
     var cells = Array.prototype.slice.call(table.querySelectorAll('td,th'));
@@ -1836,8 +2044,8 @@
 
     var target = cells[next];
     setCaretBySourceOffset(target, inlineRaw(target).length);
+    });
   }
-
   // ------------------------------------------------------------------
   // 自动配对：括号与引号（代码块内与 IME 组合态不启用）
   // ------------------------------------------------------------------
@@ -1909,6 +2117,7 @@
 
   /** 插入配对；有选区时包裹选区并保持选中 */
   function insertPair(open, close) {
+    programEdit(function () {
     var sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
     var text = sel.toString();
@@ -1936,6 +2145,7 @@
 
     markDirtyFromCaret();
     setEdited(true);
+    });
   }
 
   write.addEventListener('keydown', function (e) {
@@ -1993,6 +2203,7 @@
   });
 
   function handleEnter() {
+    programEdit(function () {
     var leaf = leafBlock();
     if (!leaf) return;
 
@@ -2062,6 +2273,7 @@
     padEmpties();
     setCaretBySourceOffset(tailEl, 0);
     updateWordCount();
+    });
   }
 
   function exitList(li) {
@@ -2090,6 +2302,7 @@
     // 空列表项：退回段落
     if (leaf.getAttribute('mdtype') === 'list_item' && !inlineRaw(leaf).trim()) {
       e.preventDefault();
+      pushUndo(true);
       exitList(leaf);
       return;
     }
@@ -2097,6 +2310,7 @@
     // 空标题：退回段落
     if (leaf.getAttribute('mdtype') === 'heading' && !inlineRaw(leaf).trim()) {
       e.preventDefault();
+      pushUndo(true);
       var p = document.createElement('p');
       p.className = 'md-block';
       p.setAttribute('mdtype', 'paragraph');
@@ -2111,6 +2325,7 @@
   // =====================================================================
 
   function wrapSelection(open, close) {
+    programEdit(function () {
     var sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
     var text = sel.toString();
@@ -2129,6 +2344,7 @@
     sel.addRange(r);
 
     markDirtyFromCaret();
+    });
   }
 
   // =====================================================================
@@ -2218,6 +2434,9 @@
 
   window.__loadContent = function (path, text, title) {
     docBaseDir = path ? String(path).replace(/[^/]*$/, '') : '';
+    stackClear(undoStack);
+    stackClear(redoStack);
+    lastGroup = null;
     loadMarkdown(text || '');
     document.title = title || 'Untitled';
     setEdited(false);
@@ -2251,6 +2470,8 @@
       case 'italic': wrapSelection('*', '*'); break;
       case 'code': wrapSelection('`', '`'); break;
       case 'toggleSource': toggleSource(); break;
+      case 'undo': lastCmdUndoAt = Date.now(); undo(); break;
+      case 'redo': lastCmdUndoAt = Date.now(); redo(); break;
       case 'toggleSpell': toggleSpell(); break;
       case 'zoomIn': setZoom(zoom + 0.1); break;
       case 'zoomOut': setZoom(zoom - 0.1); break;

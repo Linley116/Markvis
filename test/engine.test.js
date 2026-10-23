@@ -625,6 +625,101 @@ function check(name, cond, extra) {
         meta.bom.found === true && meta.bom.text.indexOf('name: fds-review') === 0, JSON.stringify(meta.bom));
   check('正文中间的 --- 仍是分隔线', meta.mid.metaCount === 0, JSON.stringify(meta.mid));
 
+  console.log('\n[7.14] 统一撤销栈（T3）');
+  const ensureLive = async () => {
+    const mode = await page.evaluate(() => document.getElementById('mode').textContent);
+    if (mode === 'Source') { await page.keyboard.press('Meta+/'); await page.waitForTimeout(200); }
+  };
+
+  // a) 实时模式：输入 → 撤销 → 重做
+  await ensureLive();
+  await page.evaluate(() => { window.__loadContent('', 'start', 't'); document.getElementById('write').focus(); });
+  await page.keyboard.type('hello');
+  await page.waitForTimeout(350);
+  const uTyped = await page.evaluate(() => window.__getMarkdown());
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(220);
+  const uUndone = await page.evaluate(() => window.__getMarkdown());
+  await page.keyboard.press('Meta+Shift+z');
+  await page.waitForTimeout(220);
+  const uRedone = await page.evaluate(() => window.__getMarkdown());
+  check('实时输入后可撤销', uTyped === 'hellostart' && uUndone === 'start', JSON.stringify([uTyped, uUndone]));
+  check('撤销后可重做', uRedone === 'hellostart', JSON.stringify(uRedone));
+
+  // b) 跨模式：实时里改一次 → 切源码再改一次 → 撤销两次
+  await ensureLive();
+  await page.evaluate(() => { window.__loadContent('', 'base', 't'); document.getElementById('write').focus(); });
+  await page.keyboard.type('A');
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Meta+/');
+  await page.waitForTimeout(200);
+  await page.keyboard.type('B');
+  await page.waitForTimeout(200);
+  const crossBefore = await page.evaluate(() => window.__getMarkdown());
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(200);
+  const cross1 = await page.evaluate(() => ({ md: window.__getMarkdown(), mode: document.getElementById('mode').textContent }));
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(250);
+  const cross2 = await page.evaluate(() => ({ md: window.__getMarkdown(), mode: document.getElementById('mode').textContent }));
+  await page.keyboard.press('Meta+Shift+z');
+  await page.waitForTimeout(250);
+  const crossRedo = await page.evaluate(() => ({ md: window.__getMarkdown(), mode: document.getElementById('mode').textContent }));
+  check('跨模式前内容正确', crossBefore === 'AbaseB', JSON.stringify(crossBefore));
+  check('源码里的改动可以撤销', cross1.md === 'Abase' && cross1.mode === 'Source', JSON.stringify(cross1));
+  check('撤销能穿过模式边界回到实时模式', cross2.md === 'base' && cross2.mode === 'Live', JSON.stringify(cross2));
+  check('跨模式重做也生效', crossRedo.md === 'Abase' && crossRedo.mode === 'Source', JSON.stringify(crossRedo));
+
+  // c) 连续输入合并成一步
+  await ensureLive();
+  await page.evaluate(() => { window.__loadContent('', '', 't'); document.getElementById('write').focus(); });
+  await page.keyboard.type('abc');
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(250);
+  const merged = await page.evaluate(() => window.__getMarkdown());
+  check('连续输入合并成一步撤销', merged === '', JSON.stringify(merged));
+
+  // d) 结构变化（段落 → 标题）也能撤销
+  await ensureLive();
+  await page.evaluate(() => { window.__loadContent('', '标题测试', 't'); document.getElementById('write').focus(); });
+  await page.keyboard.press('Home');
+  await page.keyboard.type('# ');
+  await page.waitForTimeout(400);
+  const asHeading = await page.evaluate(() => document.querySelector('#write').firstElementChild.tagName);
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(300);
+  const backToPara = await page.evaluate(() => ({
+    tag: document.querySelector('#write').firstElementChild.tagName,
+    md: window.__getMarkdown()
+  }));
+  check('段落转标题后可以撤销回段落',
+        asHeading === 'H1' && backToPara.tag === 'P' && backToPara.md === '标题测试',
+        JSON.stringify([asHeading, backToPara]));
+
+  // e) 原生「编辑」菜单走的是 __cmd('undo') / __cmd('redo')
+  await ensureLive();
+  await page.evaluate(() => { window.__loadContent('', 'menu', 't'); document.getElementById('write').focus(); });
+  await page.keyboard.type('!');
+  await page.waitForTimeout(350);
+  await page.evaluate(() => window.__cmd('undo'));
+  await page.waitForTimeout(220);
+  const menuUndo = await page.evaluate(() => window.__getMarkdown());
+  await page.evaluate(() => window.__cmd('redo'));
+  await page.waitForTimeout(220);
+  const menuRedo = await page.evaluate(() => window.__getMarkdown());
+  check('菜单入口（__cmd undo）可撤销', menuUndo === 'menu', JSON.stringify(menuUndo));
+  check('菜单入口（__cmd redo）可重做', menuRedo === '!menu', JSON.stringify(menuRedo));
+
+  // f) 打开新文档会清空历史（不会撤回到上一个文档）
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(250);
+  await page.evaluate(() => { window.__loadContent('', '另一个文档', 't2'); });
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(250);
+  const afterSwitch = await page.evaluate(() => window.__getMarkdown());
+  check('打开新文档后不会撤销到上一个文档', afterSwitch === '另一个文档', JSON.stringify(afterSwitch));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

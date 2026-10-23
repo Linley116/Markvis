@@ -172,7 +172,7 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 83 项 —— 核心闭环
+NODE_PATH=./node_modules node test/engine.test.js      # 101 项 —— 核心闭环
 NODE_PATH=./node_modules node test/features.test.js    # 68 项 —— 功能
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
@@ -184,7 +184,7 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 - 解析器是扁平的：没有嵌套块（列表项里放不了引用或代码块）。
 - 表格单元格里不能有真正的换行。
-- 撤销在实时模式下走浏览器、源码模式下走 textarea，两边没有统一。
+- 撤销是快照式的（每步存整篇 + 光标），所以能跨模式、跨重解析；代价是一步会还原整篇文档，超大文件上不如增量方案省。
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
 - 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
 - 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。

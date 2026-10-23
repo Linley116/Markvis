@@ -171,7 +171,7 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 83 assertions — core loop
+NODE_PATH=./node_modules node test/engine.test.js      # 101 assertions — core loop
 NODE_PATH=./node_modules node test/features.test.js    # 68 assertions — features
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
@@ -183,7 +183,7 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 - The parser is flat: no nested blocks (a list item cannot contain a quote or a code block).
 - Table cells cannot contain a real line break.
-- Undo is browser-native in live mode and textarea-native in source mode; they are not unified.
+- Undo is snapshot-based (whole document + caret per step), which is why it survives mode switches and block re-parsing. The trade-off: a step restores the entire document rather than one node, so it is not cheap on very large files.
 - Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
 - Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
 - Custom themes are CSS only (no scripts), and PDF export always uses the light print palette — a dark theme does not turn the PDF black.
