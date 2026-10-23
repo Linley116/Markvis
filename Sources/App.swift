@@ -224,6 +224,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let openItem = fileMenu.addItem(withTitle: L10n.t("Open…", "打开…"), action: #selector(openDocument(_:)), keyEquivalent: "o")
         openItem.keyEquivalentModifierMask = [.command]
 
+        // 快速打开：模糊搜当前文件夹里的文件（Typora 的 Open Quickly）
+        // 用 Cmd+Shift+P —— Cmd+P 留给打印，macOS 上 Typora 用 Cmd+Shift+O，
+        // 而我们的 Cmd+Shift+O 已经是侧栏开关
+        let quick = fileMenu.addItem(withTitle: L10n.t("Open Quickly…", "快速打开…"),
+                                     action: #selector(quickOpen(_:)), keyEquivalent: "P")
+        quick.keyEquivalentModifierMask = [.command, .shift]
+
         let recentItem = NSMenuItem(title: L10n.t("Open Recent", "最近打开"), action: nil, keyEquivalent: "")
         let recent = NSMenu(title: L10n.t("Open Recent", "最近打开"))
         recentItem.submenu = recent
@@ -393,6 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showFind(_ sender: Any?) { js?("window.MFSearch && window.MFSearch.show()") }
     @objc private func toggleOutline(_ sender: Any?) { js?("window.MFSidebar && window.MFSidebar.toggle()") }
     @objc private func showFiles(_ sender: Any?) { js?("window.MFSidebar && window.MFSidebar.show('files')") }
+    @objc private func quickOpen(_ sender: Any?) { js?("window.MFQuickOpen && window.MFQuickOpen.show()") }
     @objc private func toggleFocusMode(_ sender: Any?) { js?("window.MFFocus && window.MFFocus.toggleFocus()") }
     @objc private func toggleTypewriter(_ sender: Any?) { js?("window.MFFocus && window.MFFocus.toggleTypewriter()") }
     @objc private func nextTheme(_ sender: Any?) { js?("window.MFTheme && window.MFTheme.cycle()") }

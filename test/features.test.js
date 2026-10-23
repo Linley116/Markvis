@@ -846,6 +846,69 @@ const TABLE_MD = [
         f9b.moveCall.data.toDir === '/root/notes', JSON.stringify([f9b.dropping, f9b.moveCall]));
   check('拖到正文插入相对链接', /\[deep\.md\]\(deep\.md\)/.test(f9b.linked), JSON.stringify(f9b.linked.slice(0, 80)));
 
+  console.log('\n[15] 快速打开（F11，桩掉 library.allFiles）');
+  const qo = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const calls = [];
+    const files = [
+      { name: '欢迎.md', path: '/root/欢迎.md', rel: '欢迎.md', mtime: 3 },
+      { name: '第一篇.md', path: '/root/笔记/第一篇.md', rel: '笔记/第一篇.md', mtime: 2 },
+      { name: 'deep.md', path: '/root/笔记/sub/deep.md', rel: '笔记/sub/deep.md', mtime: 1 }
+    ];
+    const orig = window.bridge.callHandler;
+    window.bridge.callHandler = function (name, data, cb) {
+      calls.push({ name: name, data: data });
+      if (name === 'library.allFiles' && cb) return cb(files);
+      if (cb) cb(null);
+    };
+
+    window.MFQuickOpen.show();
+    await wait(150);
+    const shown = document.getElementById('mf-quickopen').classList.contains('mf-show');
+    const initial = Array.from(document.querySelectorAll('.mf-qo-name')).map(n => n.textContent);
+
+    // 搜「笔记」：命中路径
+    const input = document.getElementById('mf-qo-input');
+    input.value = '笔记';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(80);
+    const byFolder = Array.from(document.querySelectorAll('.mf-qo-name')).map(n => n.textContent);
+
+    // 搜「deep」：命中文件名
+    input.value = 'deep';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(80);
+    const byName = Array.from(document.querySelectorAll('.mf-qo-name')).map(n => n.textContent);
+
+    // 方向键 + 回车打开
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    const sel = document.querySelector('.mf-qo-item.mf-on');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await wait(120);
+    const openCall = calls.filter(c => c.name === 'document.openPath').pop();
+    const hidden = !document.getElementById('mf-quickopen').classList.contains('mf-show');
+
+    // Esc 关闭
+    window.MFQuickOpen.show();
+    await wait(100);
+    document.getElementById('mf-qo-input')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wait(80);
+    const escClosed = !document.getElementById('mf-quickopen').classList.contains('mf-show');
+
+    window.bridge.callHandler = orig;
+    return { shown, initial, byFolder, byName, sel: sel ? sel.textContent : '', openCall, hidden, escClosed };
+  });
+  check('面板打开并列出全部文件', qo.shown && qo.initial.length === 3, JSON.stringify([qo.shown, qo.initial]));
+  check('按文件夹名也能搜到（匹配路径）',
+        qo.byFolder.length === 2 && qo.byFolder.indexOf('第一篇.md') >= 0, JSON.stringify(qo.byFolder));
+  check('按文件名搜到单条', qo.byName.length === 1 && qo.byName[0] === 'deep.md', JSON.stringify(qo.byName));
+  check('方向键移动选中项', /deep\.md/.test(qo.sel), JSON.stringify(qo.sel));
+  check('回车打开选中文件并关闭面板',
+        qo.openCall && qo.openCall.data.path === '/root/笔记/sub/deep.md' && qo.hidden === true,
+        JSON.stringify([qo.openCall, qo.hidden]));
+  check('Esc 关闭面板', qo.escClosed === true);
+
   console.log('\n[11] 运行时错误');
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 

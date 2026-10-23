@@ -73,6 +73,20 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
         case "app.ready":
             NSLog("MarkFrame: web layer ready")
             controller?.startLibraryWatch() // 文件树开始监听根目录变化
+
+            // 自检：MARKFRAME_TEST_AUTOSAVE 时，等文档加载完连着自动保存两次，
+            // 用来验证「自己写盘不会触发文件树刷新」（监听日志里不该出现记录）
+            if ProcessInfo.processInfo.environment["MARKFRAME_TEST_AUTOSAVE"] != nil,
+               let c = controller {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    mfLog("selftest autosave: path=\(c.currentPath.isEmpty ? "(empty)" : c.currentPath)" +
+                          " root=\(c.effectiveLibraryRoot())")
+                    c.writeSilently(content: "自检写入一\n")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                        c.writeSilently(content: "自检写入二\n")
+                    }
+                }
+            }
             // 构建自检：仅当显式设置 MARKFRAME_SELFTEST 时落一份就绪标记
             if let marker = ProcessInfo.processInfo.environment["MARKFRAME_SELFTEST"] {
                 let info = (data as? [String: Any])?["version"] as? String ?? "?"
@@ -219,6 +233,9 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
             let p = (data as? [String: Any])?["path"] as? String ?? ""
             if !p.isEmpty { controller?.requestOpenInNewWindow?(p) }
             respond(nil)
+
+        case "library.allFiles":
+            respond(controller?.libraryAllFiles() ?? [])
 
         case "library.undoFileOp":
             respond(controller?.libraryUndoFileOp())
@@ -623,6 +640,7 @@ final class EditorWindowController: NSWindowController {
         guard target.path.hasPrefix(dir.standardizedFileURL.path + "/") else { return ["error": "bad name"] }
 
         let fm = FileManager.default
+        markSelfWrite(target.path)
         do {
             if kind == "dir" {
                 try fm.createDirectory(at: target, withIntermediateDirectories: true)
@@ -643,6 +661,7 @@ final class EditorWindowController: NSWindowController {
         guard !clean.isEmpty, !clean.contains("/") else { return ["error": "bad name"] }
 
         let target = url.deletingLastPathComponent().appendingPathComponent(clean).standardizedFileURL
+        markSelfWrite(url.path, target.path)
         do {
             try FileManager.default.moveItem(at: url, to: target)
             recordFileOp(kind: "rename", from: url.path, to: target.path)
@@ -667,6 +686,7 @@ final class EditorWindowController: NSWindowController {
             target = trash.appendingPathComponent("\(base).\(n).\(url.pathExtension)")
             n += 1
         }
+        markSelfWrite(url.path, target.path)
         do {
             try fm.moveItem(at: url, to: target)
             // 进废纸篓的操作不记入可撤销栈（和 Typora 一致：只有 move/rename/create 可撤）
@@ -684,6 +704,7 @@ final class EditorWindowController: NSWindowController {
         let dir = url.deletingLastPathComponent()
         let newName = Self.dedupeName(url.lastPathComponent, in: dir)
         let target = dir.appendingPathComponent(newName).standardizedFileURL
+        markSelfWrite(url.path, target.path)
         do {
             try FileManager.default.copyItem(at: url, to: target)
             recordFileOp(kind: "create", from: "", to: target.path)
@@ -722,6 +743,7 @@ final class EditorWindowController: NSWindowController {
         guard !FileManager.default.fileExists(atPath: target.path) else {
             return ["error": "目标目录已有同名项"]
         }
+        markSelfWrite(url.path, target.path)
         do {
             try FileManager.default.moveItem(at: url, to: target)
             recordFileOp(kind: "move", from: url.path, to: target.path)
@@ -846,14 +868,16 @@ final class EditorWindowController: NSWindowController {
             info: Unmanaged.passUnretained(self).toOpaque(),
             retain: nil, release: nil, copyDescription: nil
         )
-        let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes)
+        // FileEvents：拿到具体文件路径，才能判断这一批事件是不是我们自己写盘引起的
+        let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents)
         // sinceNow + 0.5s 合并窗口：一批改动只通知一次
         libWatchStream = FSEventStreamCreate(
             nil,
-            { _, info, _, _, _, _ in
+            { _, info, _, eventPaths, _, _ in
                 guard let info else { return }
                 let me = Unmanaged<EditorWindowController>.fromOpaque(info).takeUnretainedValue()
-                DispatchQueue.main.async { me.libraryDirDidChange() }
+                let paths = unsafeBitCast(eventPaths, to: CFArray.self) as? [String] ?? []
+                DispatchQueue.main.async { me.libraryDirDidChange(paths) }
             },
             &ctx, [root] as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.5, flags
@@ -874,13 +898,94 @@ final class EditorWindowController: NSWindowController {
         libWatchRoot = ""
     }
 
-    /// FSEvents 回调：合并窗口已经做了节流，这里再兜一层最小间隔
-    private func libraryDirDidChange() {
+    /// 自己写盘也会触发 FSEvents（自动保存每 1.2s 就重写一次文件），
+    /// 不认出来的话边打字文件树会跟着每 1.2s 刷新一次。
+    private var selfWritePaths: [String: TimeInterval] = [:]
+
+    /// FSEvents 报的是真实路径（macOS 上 /tmp 是 /private/tmp 的软链），
+    /// 两侧统一去掉 /private 前缀才对得上。
+    private func realPath(_ p: String) -> String {
+        p.hasPrefix("/private") ? String(p.dropFirst("/private".count)) : p
+    }
+
+    private func markSelfWrite(_ paths: String...) {
+        let now = ProcessInfo.processInfo.systemUptime
+        for p in paths where !p.isEmpty { selfWritePaths[realPath(p)] = now }
+        // 顺手清掉过期的记录，免得越积越多
+        selfWritePaths = selfWritePaths.filter { now - $0.value < 3 }
+    }
+
+    private func isSelfWrite(_ path: String) -> Bool {
+        guard let t = selfWritePaths[realPath(path)] else { return false }
+        return ProcessInfo.processInfo.systemUptime - t < 3
+    }
+
+    /** FSEvents 回调：合并窗口已经做了节流，这里再兜一层最小间隔；
+     *  整批事件都能对上我们自己刚写过的路径就整批丢掉。 */
+    private func libraryDirDidChange(_ paths: [String]) {
         let now = ProcessInfo.processInfo.systemUptime
         guard now - libWatchLastFire > 0.3 else { return }
         libWatchLastFire = now
-        mfLog("library watch: \(libWatchRoot) changed")
+
+        // 整批都是我们自己刚写过的路径 → 丢掉，不去刷文件树
+        if !paths.isEmpty && paths.allSatisfy({ isSelfWrite($0) }) { return }
+        mfLog("library watch: \(libWatchRoot) changed \(paths.prefix(3))")
         runJS("window.MFLibrary && window.MFLibrary.changed()")
+    }
+
+    /// 原子写盘。临时文件自己命名，这样 FSEvents 里自己的动静认得出来
+    /// （系统 write(atomically:) 的临时名是随机串，认不出来）。
+    private func writeAtomic(_ content: String, to path: String) throws {
+        let url = URL(fileURLWithPath: path)
+        let tmp = url.deletingLastPathComponent()
+            .appendingPathComponent(".mf-tmp-\(UUID().uuidString)")
+        try content.write(to: tmp, atomically: false, encoding: .utf8)
+        markSelfWrite(path, tmp.path)
+        if FileManager.default.fileExists(atPath: url.path) {
+            _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
+        } else {
+            try FileManager.default.moveItem(at: tmp, to: url)
+        }
+    }
+
+    /// 快速打开：把根目录里的文件列一遍（Typora 的 Open Quickly）
+    func libraryAllFiles() -> [[String: Any]] {
+        let root = effectiveLibraryRoot()
+        guard !root.isEmpty else { return [] }
+        let fm = FileManager.default
+        let rootURL = URL(fileURLWithPath: root)
+        guard let e = fm.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+            options: [.skipsPackageDescendants]) else { return [] }
+
+        var out: [[String: Any]] = []
+        while let url = e.nextObject() as? URL {
+            if out.count >= 5000 { break }
+            let name = url.lastPathComponent
+            if name.hasPrefix(".") {
+                e.skipDescendants()
+                continue
+            }
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+            if values?.isDirectory ?? false { continue }
+            guard Self.librarySupportedExts.contains(url.pathExtension.lowercased()) else { continue }
+            let rel = url.path.hasPrefix(rootURL.path + "/")
+                ? String(url.path.dropFirst(rootURL.path.count + 1)) : url.lastPathComponent
+            out.append([
+                "name": name,
+                "path": url.path,
+                "rel": rel,
+                "mtime": values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+            ])
+        }
+        out.sort { a, b in
+            let da = a["mtime"] as? Double ?? 0
+            let db = b["mtime"] as? Double ?? 0
+            if da != db { return da > db }
+            return (a["name"] as? String ?? "") < (b["name"] as? String ?? "")
+        }
+        return out
     }
 
     deinit {
@@ -1029,7 +1134,7 @@ final class EditorWindowController: NSWindowController {
     func write(content: String, saveAs: Bool, completion: @escaping (String?) -> Void) {
         if !saveAs && !currentPath.isEmpty {
             do {
-                try content.write(toFile: currentPath, atomically: true, encoding: .utf8)
+                try writeAtomic(content, to: currentPath)
                 markSaved()
                 completion(currentPath)
             } catch {
@@ -1100,7 +1205,7 @@ final class EditorWindowController: NSWindowController {
             return
         }
         do {
-            try content.write(toFile: currentPath, atomically: true, encoding: .utf8)
+            try writeAtomic(content, to: currentPath)   // 自己写盘：临时名已知，不会触发刷新
             window?.isDocumentEdited = false
         } catch {
             mfLog("autosave failed: \(error)")

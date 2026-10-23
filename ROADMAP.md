@@ -1,7 +1,7 @@
 # MarkFrame 路线图
 
-> **基线 v0.10.7** · 10,199 行（engine 3,497 / html2md 311 / css 1,300 / features 1,829 / Swift 2,093 / tests 2,278）
-> **219 项断言全绿**（引擎 113 + 功能 106）+ 原生文件操作自检 + PDF 内容回归 · 包体 3.8 MB
+> **基线 v0.10.8** · 10,596 行（engine 3,497 / html2md 311 / css 1,371 / features 1,980 / Swift 2,159 / tests 2,278）
+> **225 项断言全绿**（引擎 113 + 功能 112）+ 原生文件操作自检 + PDF 内容回归 · 包体 3.8 MB
 > 仓库：<https://github.com/Linley116/markframe>
 
 图例：✅ 已完成 · 🚧 进行中 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -45,12 +45,12 @@
 | 编号 | 功能 | 说明 | 优先级 | 规模 |
 |---|---|---|---|---|
 | **F9b** | 文件树补 Typora 细节 | ~~v0.10.4 已对齐主体，还差：拖拽移动文件/文件夹（含与访达互拖）、排序切换（名称/修改时间 + 文件夹优先开关）、Duplicate、在新窗口打开、撤销文件操作、Recent Locations / 固定文件夹~~ **v0.10.7 已完成**（除「与访达互拖」拆到 `F9c`） | ~~P1~~ | ~~M~~ |
-| **F11** | 快速打开 | `Cmd+P` 模糊搜文件名，需要文件索引（Typora 用 Web Worker + 自带 ripgrep） | 发布线 | L |
+| **F11** | 快速打开 | ~~`Cmd+P` 模糊搜文件名，需要文件索引（Typora 用 Web Worker + 自带 ripgrep）~~ **v0.10.8 已完成**：`Cmd+Shift+P`（`Cmd+P` 留给打印），原生 `library.allFiles` 遍历根，JS 子序列模糊匹配 + 分词边界加分 | ~~发布线~~ | ~~L~~ |
 | **F9c** | 文件树与访达互拖 | v0.10.7 只做了树内拖拽；从访达拖文件进侧栏、拖出侧栏到访达还没做 | P2 | M |
 | **F9d** | 撤销删除 / 移动冲突处理 | 删除进废纸篓不可撤销（和 Typora 一致）；同名目标现在直接拒绝，可考虑改名落地 | P2 | S |
 | **F13** | HTML 块 | 内联编辑 + `iframe` 沙箱（Typora 用 `srcdoc` + 独立 partition） | P2 | M |
 | **F14** | emoji / 语言名补全 | 输入 `:` 补 emoji；围栏语言名补全 | 随时 | S |
-| **F15** | 增量落盘 | 复刻 `document.syncChangeIfNeeded` 的命令流协议，取代全量保存 | P2 | M |
+| **F15** | 增量落盘 | 复刻 `document.syncChangeIfNeeded` 的命令流协议，取代全量保存。**v0.10.8 评估后暂缓**：JS 要 diff 就得先序列化全篇（省不掉），原生仍是整文件写；bench 实测 2500 块序列化只在毫秒级，收益不抵写坏文件的风险 | P2 | M |
 | **F16** | 发布分发 | dmg + 公证。现在 ad-hoc 签名，别人机器上会被 Gatekeeper 拦 | 发布线 | M |
 | **F18** | 打印 | `NSPrintOperation` + 与 PDF 共用同一份 print stylesheet | 随时 | S |
 
@@ -84,6 +84,7 @@
 | v0.10.6 | 从浏览器/Word 复制内容粘进来，格式全丢（只吞纯文本） | 自写 `web/html2md.js`（311 行，不引 turndown）：DOMParser 走 DOM 树转 Markdown，覆盖标题/段落/加粗斜体删除线/行内代码/链接/图片/嵌套列表/任务清单/嵌套引用/带语言代码块/表格（含对齐）/分隔线/硬换行；script/style/表单控件整棵跳过。引擎粘贴处理改为：图片仍走原生存盘 → 剪贴板有**块级结构**的富文本就转换后按块插入（多块内容走 `reparseInto` 拆块重解析，光标落到粘贴末尾，可撤销）→ 没有富文本或是代码编辑器的高亮 HTML（全是 span，`isRich` 识别）就按纯文本插。表格单元格里按单行文本插。源码模式粘贴同样转换。新增 15 项断言（含真实页面结构 fixture 的转换 + 往返） |
 | v0.10.7 | 文件树只做了 Typora 文件侧栏的主体，细节（排序、复制、新窗口、拖拽移动、最近文件夹）都还没有 | **F9b**：①**排序切换**——底部「排序」菜单：按名称 / 按修改时间 + 文件夹优先开关，偏好写 localStorage，排序参数传给原生（`library.list` 新增 `sort` / `groupDirs`，原生带 `mtime` 一起返回）；②**Duplicate**——右键「复制」走 `library.duplicate`，重名自动 `name copy.md` / `name copy 2.md`；③**在新窗口打开**——`library.openInNewWindow` → AppDelegate 的 `openFileInNewWindow`（不复用空白窗口）；④**树内拖拽移动**——行可拖，拖到目录行移动、拖到空白回根目录，拒绝移进自己的子孙（环）和覆盖同名；拖到正文按 `caretPositionFromPoint` 落光标插相对链接（走 `MF.programEdit` 可撤销）；⑤**最近文件夹 / 固定**——底部「最近」菜单：固定段 + 最近段，每条可固定/移除/切根，可清除列表（原生记在 UserDefaults，`setRoot` / `chooseRoot` / 打开文档都会记）；⑥**撤销上一次文件操作**——`library.undoFileOp`，新建/复制→删除、重命名/移动→移回，删除进废纸篓不记入（与 Typora 一致）。原生 `create/rename/delete/duplicate/move/reveal` 都加了显式 `root` 参数，自检可以在测试目录里跑；自检新增 `MARKFRAME_TEST_LIBRARY_OPS` 真实跑一遍 create→duplicate×2→rename→move→(拒绝自嵌套)→undo，断言命名去重、循环拒绝、撤销还原；三种排序模式用错开时间戳的 fixture 验证。新增 9 项 JS 断言 |
 
+| v0.10.8 | 边打字文件树每 1.2s 刷新一次（v0.10.4 的 FSEvents 监听被自动保存触发）；另外「快速打开」缺失 | ①**修监听自触发**：自动保存/Cmd+S 改用自实现的 `writeAtomic`（临时文件自己命名 `.mf-tmp-<uuid>`，系统 `write(atomically:)` 的随机临时名认不出来），写盘前把「目标 + 临时」两个路径登记进 `selfWritePaths`；FSEvents 加 `kFSEventStreamCreateFlagFileEvents` 拿到具体文件路径，一批事件全是自己刚写过的路径就整批丢弃。**坑**：FSEvents 报的是真实路径（`/tmp` → `/private/tmp` 软链），两侧要统一去掉 `/private` 前缀才对得上（`URL.resolvingSymlinksInPath()` 在这不起作用）。文件树自身的增删改名也照样登记。自检新增 `MARKFRAME_TEST_AUTOSAVE`（打开文档后连写两次，监听日志应为 0 条；外部改动仍应为 1 条）。②**F11 快速打开**：新增 `features/quickopen.js` + 原生 `library.allFiles`（遍历根目录、按类型过滤、最多 5000 条、按修改时间倒序）；子序列模糊匹配（开头/分词边界/文件名命中加分），↑↓ 选择、Enter 打开、Esc 关闭、点遮罩关闭，清单缓存 30s（文件树变了作废）。`Cmd+Shift+P` + 文件菜单「快速打开…」（`Cmd+P` 留给 `F18` 打印）。新增 6 项断言 |
 ---
 
 ## 五、已知限制（面向使用者）

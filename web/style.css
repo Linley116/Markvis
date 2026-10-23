@@ -970,6 +970,105 @@ body:not(.mf-sidebar-open) #mf-outline-btn:hover {
   color: var(--muted);
 }
 
+/* ---------- 快速打开（F11） ---------- */
+
+#mf-quickopen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 92px;
+  background: rgba(0, 0, 0, .18);
+}
+
+#mf-quickopen.mf-show { display: flex; }
+
+.mf-qo-box {
+  width: 560px;
+  max-width: calc(100vw - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--panel-shadow);
+  font-size: 13px;
+}
+
+.mf-qo-input {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  font-size: 13.5px;
+  outline: none;
+}
+
+.mf-qo-list {
+  flex: 1 1 auto;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.mf-qo-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mf-qo-item:hover { background: var(--code-bg); }
+
+.mf-qo-item.mf-on { background: var(--code-bg); }
+
+.mf-qo-item.mf-on .mf-qo-name { color: var(--accent); }
+
+.mf-qo-name {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mf-qo-dir {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mf-qo-empty {
+  padding: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mf-qo-hint {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+
 /* ---------- 查找替换 ---------- */
 
 #mf-search {
