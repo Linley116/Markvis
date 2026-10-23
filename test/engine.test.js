@@ -185,6 +185,38 @@ function check(name, cond, extra) {
   check('源码框里按 Cmd+/ 能切回实时模式', backToLive.mode === 'Live', JSON.stringify(backToLive));
   check('切回后焦点回到正文', backToLive.focus === 'write', JSON.stringify(backToLive));
 
+  console.log('\n[6.2] Cmd+/ 保持阅读位置（回归：切模式跳到文档末尾）');
+  await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const md = Array.from({ length: 40 }, (_, i) => `## 第 ${i} 章\n\n第 ${i} 段正文。\n`).join('\n');
+    window.__loadContent('', md, 'long.md');
+    await wait(150);
+    const sc = document.getElementById('scroll');
+    sc.scrollTop = (sc.scrollHeight - sc.clientHeight) * 0.5;
+    await wait(100);
+  });
+  const jump = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const sc = document.getElementById('scroll');
+    const source = document.getElementById('source');
+    const ratio = el => {
+      const max = el.scrollHeight - el.clientHeight;
+      return max > 0 ? el.scrollTop / max : 0;
+    };
+    const before = ratio(sc);
+    window.__cmd('toggleSource');
+    await wait(220);
+    const inSource = { ratio: ratio(source), caretRatio: source.selectionStart / source.value.length };
+    window.__cmd('toggleSource');
+    await wait(220);
+    return { before, inSource, after: ratio(sc) };
+  });
+  check('切到源码模式停在原位置（不再跳文档末尾）',
+        Math.abs(jump.inSource.ratio - jump.before) < 0.2 && jump.inSource.caretRatio < 0.8,
+        JSON.stringify(jump.inSource));
+  check('切回实时模式回到原位置',
+        Math.abs(jump.after - jump.before) < 0.05, JSON.stringify(jump));
+
   console.log('\n[7] 光标模型：图片是非文本原子，偏移不能漂');
   const imgCaret = await page.evaluate(async () => {
     window.__loadContent('', 'hello ![](a.png) world', 't');
@@ -664,7 +696,9 @@ function check(name, cond, extra) {
   await page.keyboard.press('Meta+Shift+z');
   await page.waitForTimeout(250);
   const crossRedo = await page.evaluate(() => ({ md: window.__getMarkdown(), mode: document.getElementById('mode').textContent }));
-  check('跨模式前内容正确', crossBefore === 'AbaseB', JSON.stringify(crossBefore));
+  // 注意：切到源码模式后光标跟着走（v0.10.5 修掉「跳到文档末尾」后），
+  // 'B' 插在 'A' 后面而不是末尾
+  check('跨模式前内容正确', crossBefore === 'ABbase', JSON.stringify(crossBefore));
   check('源码里的改动可以撤销', cross1.md === 'Abase' && cross1.mode === 'Source', JSON.stringify(cross1));
   check('撤销能穿过模式边界回到实时模式', cross2.md === 'base' && cross2.mode === 'Live', JSON.stringify(cross2));
   check('跨模式重做也生效', crossRedo.md === 'Abase' && crossRedo.mode === 'Source', JSON.stringify(crossRedo));

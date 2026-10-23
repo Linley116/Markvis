@@ -1,7 +1,7 @@
 # MarkFrame 路线图
 
-> **基线 v0.10.4** · 9,456 行（engine 3,326 / css 1,247 / features 1,547 / Swift 1,872 / tests 1,726）
-> **193 项断言全绿**（引擎 111 + 功能 82）+ PDF 内容回归 + 崩溃恢复 / 主题 / 文件树自检 · 包体 3.7 MB
+> **基线 v0.10.5** · 9,456 行（engine 3,326 / css 1,247 / features 1,547 / Swift 1,872 / tests 1,726）
+> **195 项断言全绿**（引擎 113 + 功能 82）+ PDF 内容回归 + 崩溃恢复 / 主题 / 文件树自检 · 包体 3.7 MB
 > 仓库：<https://github.com/Linley116/markframe>
 
 图例：✅ 已完成 · 🚧 进行中 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -78,6 +78,7 @@
 | v0.9.1 | 打开带 YAML front matter 的文件（如 `SKILL.md`）时，开头整块元数据**看不见** | T1 把行内标记的类名定成 `.md-meta`，块级 front matter 也叫这个名字 → 行内那条 `display:none` 把整块元数据一起藏了。块级改名 `.md-meta-block`（Typora 的叫法）；导出改为在分页时直接跳过 `mdtype=meta`；顺带吃掉文件开头的 BOM |
 | v0.10.3 | 跑测试会拉起用户的 Google Chrome；命令一旦被超时/中断强杀，headless Chrome 变成孤儿进程留在机器上，只能去活动监视器手动杀 | 新增 `test/browser.js` 统一托管浏览器生命周期：自己 spawn Chrome（独立进程组 + 一次性临时 profile，不碰用户数据）走 CDP 连接；四层收尸——`process.on('exit')` 同步强杀进程组、SIGINT/SIGTERM 处理器、看门狗进程（node 被 SIGKILL 时它补刀，macOS 没有 `PR_SET_PDEATHSIG` 只能这么干）、正常收尾 `closeTestBrowser()`；三个测试文件改走 helper，188 项断言不变 |
 | v0.10.4 | 文件树放在右侧，和 Typora 的左侧边栏对不上；根目录被手动选择粘住，打开别的目录的文件不跟过去；当前打开的文件在树里没有标记；访达里改了文件树不刷新；不支持类型的文件也列出来 | 按 Typora 的 Files Sidebar 重做：①合并成**左侧统一侧栏**，顶部「大纲 / 文件」图标 tab 切换（新增 `features/sidebar.js` 管外壳/宽度/开关，右上角按钮删除），`Cmd+Shift+O` 开关侧栏、`Cmd+Shift+E` 直接开到文件 tab；②**根目录跟随当前文档**——打开一个文件，它的父文件夹就是树的根（Typora 的 "parent folder will be automatically loaded"），手动「打开文件夹…」同理，以最近一次动作为准；③**当前文件高亮**并自动展开祖先目录滚动到可见；④**只显示 Typora 支持的类型**（md/markdown/mdown/mkdn/mkd/txt，目录永远显示）；⑤原生 **FSEvents 监听根目录子树**，外部增删改名防抖后自动刷新（行内编辑中不冲掉输入框）；⑥侧栏底部加当前文件夹操作条（打开文件夹… / 刷新），右键菜单加「复制路径」；⑦「显示/隐藏大纲」菜单改「显示/隐藏侧栏」并新增「显示文件树」 |
+| v0.10.5 | `Cmd+/` 切源码模式直接跳到文档最后 | 两个方向都保持位置：**实时→源码**时光标在可视区就跟着光标走（Typora 行为，`caretSourceOffset` + 块偏移表算绝对偏移），光标被滚出可视区就跟着视图顶部所在的块；**源码→实时**时光标在 textarea 可视区就跟着光标，用滚轮读到别处就跟着 textarea 滚动比例——把对应块滚到视图顶部并落光标，顺带修掉 `write.focus()` 把视图拽回开头的次生问题。**根因**：`source.value = 整篇` 会把光标送到末尾，`focus()` 再把内部滚动的 textarea 滚到底 |
 
 ---
 

@@ -18,6 +18,7 @@
   var source = document.getElementById('source');
   var modeEl = document.getElementById('mode');
   var wordCountEl = document.getElementById('wordcount');
+  var scroller = document.getElementById('scroll');
 
   // =====================================================================
   // 1. 桥（与原生三通道对应：异步 / 回调 / 同步 prompt）
@@ -2557,21 +2558,102 @@
 
   var sourceMode = false;
 
+  /** 顶层块的源码偏移表（getMarkdown 用 '\n\n' 连接，故每块 +2） */
+  function blockSourceOffsets() {
+    var offsets = [];
+    var acc = 0;
+    for (var i = 0; i < write.children.length; i++) {
+      offsets.push(acc);
+      acc += blockRaw(write.children[i]).length + 2;
+    }
+    return offsets;
+  }
+
+  /** 视图顶部附近落在哪个顶层块上（光标不在可视区时用它定位） */
+  function viewTopBlockIndex() {
+    var top = scroller.getBoundingClientRect().top + 4;
+    var idx = 0;
+    for (var i = 0; i < write.children.length; i++) {
+      if (write.children[i].getBoundingClientRect().bottom >= top) { idx = i; break; }
+      idx = i;
+    }
+    return idx;
+  }
+
+  /** 源码偏移落在哪个顶层块上 */
+  function blockIndexAtSourceOffset(offset) {
+    var offsets = blockSourceOffsets();
+    var idx = 0;
+    for (var i = 0; i < offsets.length; i++) {
+      if (offsets[i] <= offset) idx = i; else break;
+    }
+    return idx;
+  }
+
+  /** 实时模式光标的绝对源码偏移；光标不在正文里返回 null */
+  function liveCaretSourceOffset() {
+    var leaf = leafBlock();
+    if (!leaf) return null;
+    var top = topBlockOf(leaf) || leaf;
+    var start = 0;
+    for (var i = 0; i < write.children.length; i++) {
+      if (write.children[i] === top) break;
+      start += blockRaw(write.children[i]).length + 2;
+    }
+    return start + caretSourceOffset(top);
+  }
+
   function toggleSource() {
     if (!sourceMode) {
+      // 实时 → 源码：保持编辑/阅读位置。
+      // 直接把整篇塞进 textarea 会把光标送到末尾，focus 再把 textarea
+      // 滚到底 —— 表现为「Cmd+/ 跳到文档最后」。光标在可视区里就跟着
+      // 光标走（Typora 行为），否则跟着视图顶部所在的块。
+      var offset = null;
+      var leaf = leafBlock();
+      if (leaf) {
+        var lr = leaf.getBoundingClientRect();
+        var box = scroller.getBoundingClientRect();
+        if (lr.bottom >= box.top && lr.top <= box.bottom) offset = liveCaretSourceOffset();
+      }
+      if (offset == null) offset = blockSourceOffsets()[viewTopBlockIndex()] || 0;
       source.value = getMarkdown();
       sourceMode = true;
       write.style.display = 'none';
       source.style.display = 'block';
       modeEl.textContent = 'Source';
+      try { source.selectionStart = offset; source.selectionEnd = offset; } catch (e) {}
       source.focus();
     } else {
+      // 源码 → 实时：光标在 textarea 可视区里就跟着光标，滚到别处读了
+      // 就跟着滚动比例；把对应块滚到视图顶部并落光标，
+      // 否则 write.focus() 会把视图拽回开头。
+      var caret = 0;
+      try { caret = source.selectionStart || 0; } catch (e) {}
+      var lineH = parseFloat(getComputedStyle(source).lineHeight) || 21;
+      var caretLine = source.value.slice(0, caret).split('\n').length - 1;
+      var firstVisible = source.scrollTop / lineH;
+      var idx;
+      if (Math.abs(caretLine - firstVisible) < 3) {
+        idx = blockIndexAtSourceOffset(caret);
+      } else {
+        var maxS = source.scrollHeight - source.clientHeight;
+        var ratio = maxS > 0 ? source.scrollTop / maxS : 0;
+        idx = Math.round(ratio * (write.children.length - 1));
+      }
+      var text = source.value;
       sourceMode = false;
       source.style.display = 'none';
       write.style.display = 'block';
       modeEl.textContent = 'Live';
-      loadMarkdown(source.value);
+      loadMarkdown(text);
       setEdited(true);
+      var el = write.children[idx];
+      if (el) {
+        var base = scroller.getBoundingClientRect();
+        scroller.scrollTop += el.getBoundingClientRect().top - base.top;
+        setCaretBySourceOffset(el, 0);
+      }
       write.focus();
     }
   }
