@@ -24,13 +24,15 @@ It started as an experiment: I reverse-engineered Typora's architecture with REA
 
 It is **not** a Typora replacement and does not aim to be. It is a working, readable implementation of the same core ideas, with zero third-party runtime dependencies.
 
+**Install: build from source (see [Build](#build-install-from-source)). No prebuilt or notarized binaries are provided.**
+
 ### Why it is not Electron
 
 Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does the same:
 
 | | Electron apps | MarkFrame |
 |---|---|---|
-| Binary size | ~150 MB | **~3.8 MB** (about 2.5 MB of it is Mermaid); DMG is ~1.7 MB |
+| Binary size | ~150 MB | **~3.8 MB** (about 2.5 MB of it is Mermaid) |
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
@@ -135,7 +137,9 @@ Themes are plain CSS. Drop a file into `~/Library/Application Support/MarkFrame/
 
 > The theme menu itself is labelled in Chinese (主题 / 自定义 / 打开主题文件夹…), like the rest of the editor chrome.
 
-### Build
+### Build (install from source)
+
+**The repository ships source only — there are no notarized binaries.** Apple notarization requires a paid Developer ID account, and an individual certificate publishes your legal name and Team ID inside the signature. Building from source is therefore the only official distribution method.
 
 Requirements: macOS 13+, Swift 6 toolchain (`xcode-select --install`). The build itself needs no npm, no Xcode project, and no runtime dependencies; `playwright-core` is only used by the JS tests.
 
@@ -145,29 +149,16 @@ cd markframe
 ./build.sh          # compile + install to ~/Applications
 ```
 
-`build.sh` compiles three Swift files with `swiftc`, assembles the `.app` bundle, ad-hoc signs it, and installs a single visible copy to `~/Applications` (so Launchpad does not show duplicates).
+`build.sh` compiles five Swift files with `swiftc`, assembles the `.app` bundle, ad-hoc signs it, and installs a single visible copy to `~/Applications` (so Launchpad does not show duplicates). Because you built it locally, it runs without Apple notarization.
 
-To keep the build artifact for distribution:
-
-```bash
-./build.sh --keep   # leaves build/MarkFrame.app in place
-```
-
-To produce a distributable DMG:
+Build without installing:
 
 ```bash
-./release.sh        # dist/MarkFrame-<version>.dmg (ad-hoc signed, not notarized)
+./build.sh --keep                    # leaves build/MarkFrame.app in place
+MARKFRAME_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alone
 ```
 
-With a Developer ID certificate, sign and notarize it so other Macs open it without a Gatekeeper warning:
-
-```bash
-MARKFRAME_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-APPLE_ID="you@example.com" APPLE_TEAM_ID="TEAMID" APPLE_APP_PASSWORD="app-specific-password" \
-./release.sh
-```
-
-Alternatively store a `notarytool` keychain profile and set `MARKFRAME_NOTARY_PROFILE`. Without credentials the script says plainly that the product is packaged but not notarized.
+`release.sh` is a maintainer-only convenience for local DMG packaging. Its output is ad-hoc signed and not notarized — **do not publish it as a download**, because Gatekeeper will block it on other Macs.
 
 > The bundled `web/vendor/highlight.min.js` (highlight.js 11.9.0, BSD-3-Clause) is vendored on purpose so the build works offline.
 
@@ -209,12 +200,11 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 - Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
 - Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
 - Custom themes are CSS only (no scripts), and PDF export always uses the light print palette — a dark theme does not turn the PDF black.
-- The default build is ad-hoc signed. Do not distribute it without notarizing; `release.sh` supports Developer ID signing and notarization, but needs a developer account.
-- The DMG contains only the build machine’s architecture (arm64 on Apple Silicon); Intel Macs need a separate build.
+- Source only: there are no prebuilt or notarized binaries. Any DMG produced by `release.sh` is for local or internal use by the maintainer.
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. The current focus is CI, native XCTest, DMG packaging, and notarization; incremental save is deferred after evaluation.
+See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. Distribution is source-only with no Apple notarization; incremental save is deferred after evaluation.
 
 ### License
 

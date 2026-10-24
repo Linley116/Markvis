@@ -21,7 +21,7 @@
 | ✅ | **6** | 公式与图表 | `F5` KaTeX 数学 · `F6` Mermaid · `F5b` 源码浮层 · PDF 弱引用修复 | 已完成 |
 | ✅ | **7** | 主题与个性化 | `F17` 自定义主题包（`themes/*.css`）· 状态栏主题菜单 · 打开文件夹 / 重新加载 · `--mf-editor-width` 交给主题 | 已完成（`F14` 补全顺延到第 8 轮随手项） |
 | 🚧 | **8** | 结构与基础设施 | `T3` 撤销栈 · `T4` 嵌套块 · `F9` 文件树 · `F15` 增量落盘 | `T3` / `T4` / `F9` 已完成，`F15` 评估后暂缓 |
-| 🚧 | **9** | 发布线 | CI（build + 三套测试）· `T8` 原生测试 · `F16` dmg + 公证 · `F11` 快速打开 | `F11` / CI / `T8` 已完成；`F16` 打包完成，公证待 Developer ID 账号 |
+| ✅ | **9** | 发布线 | CI（build + 三套测试）· `T8` 原生测试 · `F16` 分发 · `F11` 快速打开 | `F11` / CI / `T8` 已完成；`F16` 定为源码分发，不做公证 |
 
 > 排期变更：第 3 轮原计划是 `F5`/`F6`/`T1`，实际先做了 PDF 重做与开源，这三项分别落到第 5、6 轮。
 
@@ -47,7 +47,7 @@
 | **F13** | HTML 块 | 内联编辑 + `iframe` 沙箱（Typora 用 `srcdoc` + 独立 partition） | P2 | M |
 | **F14** | emoji / 语言名补全 | 输入 `:` 补 emoji；围栏语言名补全 | 随时 | S |
 | **F15** | 增量落盘 | 复刻 `document.syncChangeIfNeeded` 的命令流协议，取代全量保存。**v0.10.8 评估后暂缓**：JS 要 diff 就得先序列化全篇（省不掉），原生仍是整文件写；bench 实测 2500 块序列化只在毫秒级，收益不抵写坏文件的风险 | P2 | M |
-| **F16** | 发布分发 | **v0.11.0 已完成 `release.sh`**：Developer ID 签名、DMG、`notarytool` 提交与装订；无凭据时明确标注未公证。剩余：需要用户的 Apple Developer ID 账号实际跑一次公证 | 发布线 | ~~M~~ |
+| **F16** | 发布分发 | **决定不做公证分发**：README 引导从源码构建，官方不提供预编译二进制。`release.sh` 仅保留给维护者本机/内部打包，产物 ad-hoc 签名、未公证。原因：公证需付费 Developer ID，个人证书会把法定姓名和 Team ID 公开写进签名 | ~~发布线~~ | ~~M~~ |
 | **F18** | 打印 | `NSPrintOperation` + 与 PDF 共用同一份 print stylesheet | 随时 | S |
 
 ---
@@ -91,8 +91,7 @@
 
 - **表格单元格里不能换行**：Enter 在单元格内被拦掉。
 - **超高段落按字符切分**：导出 PDF 时该段的行内格式会丢失（只影响那一段）。
-- **默认仍是 ad-hoc 签名**：`./release.sh` 能打出 DMG，但没有 Apple Developer ID 凭据时不会公证，不要直接把产物发给别人。
-- **当前构建只含本机架构**：在 Apple Silicon 上打出的 DMG 是 arm64，Intel Mac 需要单独构建。
+- **只提供源码**：仓库没有预编译或已公证的二进制，请按 README 自行构建；`release.sh` 的 DMG 仅供本机或内部使用。
 
 ---
 
@@ -148,5 +147,7 @@ PDF 回归原来 `sleep 14`，本机够用，CI 上文件还没写完就判失�
 
 1. `./build.sh` 能过，`test/engine.test.js` + `test/features.test.js` + `test/native.sh` + `test/pdf-regression.sh` 全绿。
 2. ✅ GitHub Actions 跑通（`.github/workflows/ci.yml`，macOS 15 runner 上构建 + 三套测试 + PDF 回归）：2026-10-24 run `40065959796` 全部 success。
-3. `F16`：`./release.sh` 已能产出 DMG；公证仍需 Developer ID 证书和 Apple 账号。
-4. 仓库描述与 Topics 填上（SSH 推不了仓库设置，得走网页或 API）。**仍待手动完成。**
+3. ✅ `F16` 决策完成：不公证，对外只提供源码；`release.sh` 的 DMG 不对外发布。
+4. 仓库描述与 Topics 填上（SSH 推不了仓库设置，得走网页或 API）。描述已设置；Topics 仍需补齐。
+
+> **发布策略（2026-10-24）**：不做 Apple 公证分发。个人开发者证书会把法定姓名和 Team ID 写进签名，公开下载还会让用户面对 Gatekeeper；因此 README 只引导从源码构建，DMG 脚本留在维护者侧。

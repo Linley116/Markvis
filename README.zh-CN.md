@@ -25,13 +25,15 @@ MarkFrame 是一个 macOS 上的所见即所得 Markdown 编辑器：在实时�
 
 它**不是** Typora 的替代品，也没打算做成替代品。它是一份能跑、能读的同构实现，运行时零第三方依赖。
 
+**安装方式：从源码构建（见下文「构建」）。仓库不提供预编译或已公证的二进制。**
+
 ### 为什么它不是 Electron
 
 Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是：
 
 | | Electron 应用 | MarkFrame |
 |---|---|---|
-| 包体 | 约 150 MB | **约 3.8 MB**（其中约 2.5 MB 是 Mermaid），DMG 约 1.7 MB |
+| 包体 | 约 150 MB | **约 3.8 MB**（其中约 2.5 MB 是 Mermaid） |
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
@@ -136,7 +138,9 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 
 > 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
 
-### 构建
+### 构建（从源码安装）
+
+**仓库只提供源码，不提供已公证的二进制。** Apple 公证需要付费的 Developer ID 账号，个人证书还会把法定姓名和 Team ID 公开写进签名；因此官方分发的唯一方式是自行构建。
 
 要求：macOS 13+、Swift 6 工具链（`xcode-select --install`）。构建本身不需要 npm、不需要 Xcode 工程、运行时没有第三方依赖；只有跑 JS 测试才用得到 `playwright-core`。
 
@@ -146,29 +150,16 @@ cd markframe
 ./build.sh          # 编译 + 安装到 ~/Applications
 ```
 
-`build.sh` 用 `swiftc` 编译三个 Swift 文件、组装 `.app`、ad-hoc 签名，并只往 `~/Applications` 装一份（避免启动台出现重复图标）。
+`build.sh` 用 `swiftc` 编译五个 Swift 文件、组装 `.app`、ad-hoc 签名，并只往 `~/Applications` 装一份（避免启动台出现重复图标）。源码是你自己拉的、产物是你自己编的，本地运行不需要 Apple 公证。
 
-要保留分发用的产物：
-
-```bash
-./build.sh --keep   # 保留 build/MarkFrame.app
-```
-
-要生成可分发的 DMG：
+只构建、不安装：
 
 ```bash
-./release.sh        # dist/MarkFrame-<版本>.dmg（ad-hoc 签名，未公证）
+./build.sh --keep                    # 保留 build/MarkFrame.app
+MARKFRAME_NO_INSTALL=1 ./build.sh --keep   # 只构建，不动 ~/Applications
 ```
 
-拿 Developer ID 证书后可以签名并公证，其他 Mac 才能直接打开：
-
-```bash
-MARKFRAME_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-APPLE_ID="you@example.com" APPLE_TEAM_ID="TEAMID" APPLE_APP_PASSWORD="app-specific-password" \
-./release.sh
-```
-
-也可以先用 `xcrun notarytool store-credentials` 存好钥匙串配置，再设 `MARKFRAME_NOTARY_PROFILE`。没有公证凭据时脚本会明确提示产物仍未公证，不会把“已打包”说成“已公证”。
+DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用；它产出 ad-hoc 签名、未公证的 DMG，**不要作为公开下载**，别人打开时会被 Gatekeeper 拦截。
 
 > `web/vendor/highlight.min.js`（highlight.js 11.9.0，BSD-3-Clause）是刻意内置的，保证没网也能构建。
 
@@ -210,12 +201,11 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
 - 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
 - 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
-- 默认构建是 ad-hoc 签名，未公证前不要分发构建产物；`release.sh` 支持 Developer ID 签名与公证，但需要开发者账号。
-- 当前 DMG 只包含构建机器架构（Apple Silicon 上是 arm64），Intel Mac 需要单独构建。
+- 官方只提供源码，不提供预编译或已公证的二进制；`release.sh` 打出的 DMG 仅供维护者本机或内部使用。
 
 ### 路线图
 
-见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着待修 bug 列表、待做功能列表和踩坑记录。当前主线是 CI、原生 XCTest、DMG 与公证；增量落盘经评估后暂缓。
+见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着待修 bug 列表、待做功能列表和踩坑记录。对外分发采用源码构建，不做 Apple 公证；增量落盘经评估后暂缓。
 
 ### 许可证
 
