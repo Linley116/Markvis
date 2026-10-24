@@ -4,7 +4,7 @@
 
 **按 Typora 的架构实现的 macOS Markdown 编辑器 —— 原生 Cocoa 外壳 + WKWebView，不是 Electron。**
 
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
 [![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
@@ -145,7 +145,7 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 要求：macOS 13+、Swift 6 工具链（`xcode-select --install`）。构建本身不需要 npm、不需要 Xcode 工程、运行时没有第三方依赖；只有跑 JS 测试才用得到 `playwright-core`。
 
 ```bash
-git clone https://github.com/Linley116/Markvis.git
+git clone https://github.com/Linley116/Markvis.git markvis
 cd markvis
 ./build.sh          # 编译 + 安装到 ~/Applications
 ```

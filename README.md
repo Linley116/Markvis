@@ -144,7 +144,7 @@ Themes are plain CSS. Drop a file into `~/Library/Application Support/Markvis/th
 Requirements: macOS 13+, Swift 6 toolchain (`xcode-select --install`). The build itself needs no npm, no Xcode project, and no runtime dependencies; `playwright-core` is only used by the JS tests.
 
 ```bash
-git clone https://github.com/Linley116/Markvis.git
+git clone https://github.com/Linley116/Markvis.git markvis
 cd markvis
 ./build.sh          # compile + install to ~/Applications
 ```
