@@ -26,6 +26,7 @@
     cache: {},       // 目录路径 -> [entry]
     loading: {},     // 目录路径 -> 是否正在加载
     expanded: {},    // 目录路径 -> 是否展开
+    batch: 0,        // 批量刷新中：>0 时先不渲染，等这一批全回来再一次性渲染
     sort: 'name',    // name | mtime（Typora 的排序方式）
     groupDirs: true, // 文件夹优先
     drag: ''         // 正在拖动的文件路径
@@ -77,8 +78,9 @@
     return s.slice(0, i);
   }
 
-  function loadDir(path, cb) {
-    if (state.cache[path]) { if (cb) cb(state.cache[path]); return; }
+  /** force=true 时忽略已有缓存重新向原生要一份（刷新用） */
+  function loadDir(path, cb, force) {
+    if (!force && state.cache[path]) { if (cb) cb(state.cache[path]); return; }
     if (state.loading[path]) { if (cb) cb([]); return; }
     state.loading[path] = true;
 
@@ -94,13 +96,44 @@
       // 根目录用绝对路径做 key，子目录同样
       state.cache[path] = items;
       if (cb) cb(items);
-      render();
+      if (!state.batch) render();
     });
   }
 
+  /**
+   * 刷新整棵树。
+   *
+   * 关键：不能只清空 cache 再拉根目录 —— 那样已展开的层级会因为拿不到
+   * 子目录内容而「塌回去」（箭头还开着，里面的文件全没了）。所以这里
+   * 把「根 + 所有已加载且展开的目录」一起重拉：刷新期间继续用旧缓存渲
+   * 染（不闪、不塌），全部回来后再一次性重绘。
+   */
   function refresh(cb) {
-    state.cache = {};
-    loadDir(state.root, cb);
+    if (!state.root) { render(); if (cb) cb(); return; }
+    var paths = [state.root];
+    for (var p in state.cache) {
+      if (p !== state.root && state.expanded[p]) paths.push(p);
+    }
+
+    var left = paths.length;
+    var finished = false;
+    state.batch++;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      clearTimeout(guard);
+      state.batch--;
+      render();
+      if (cb) cb();
+    }
+    function done() {
+      if (--left > 0) return;
+      finish();
+    }
+    // 兜底：原生万一不回调，别让 batch 一直挂着把后面的渲染全吞掉
+    var guard = setTimeout(finish, 4000);
+
+    for (var i = 0; i < paths.length; i++) loadDir(paths[i], done, true);
   }
 
   /** 原生监听通知：外部（访达/其他应用）改了文件，防抖后刷新 */
@@ -119,9 +152,18 @@
 
   // ---------- 渲染 ----------
 
+  /**
+   * 目录是否「真的」展开：既记着展开，又拿到了内容。
+   * 只认 expanded 会让箭头开着、里面却是空的（缓存缺失时），
+   * 用户再点一下反而变成收起 —— 状态要和实际渲染一致。
+   */
+  function isOpen(path) {
+    return !!state.expanded[path] && !!state.cache[path];
+  }
+
   function rowHTML(entry, depth) {
     var isDir = !!entry.dir;
-    var expanded = !!state.expanded[entry.path];
+    var expanded = isDir && isOpen(entry.path);
     var pad = 8 + depth * 14;
 
     var icon = isDir
@@ -147,7 +189,7 @@
     var out = '';
     for (var i = 0; i < items.length; i++) {
       out += rowHTML(items[i], depth);
-      if (items[i].dir && state.expanded[items[i].path]) {
+      if (items[i].dir && isOpen(items[i].path)) {
         out += treeHTML(items[i].path, depth + 1);
       }
     }
@@ -165,17 +207,32 @@
       listEl.innerHTML = '<div class="mf-lib-empty">空目录</div>';
       return;
     }
+    var keepScroll = listEl.scrollTop;
     listEl.innerHTML = treeHTML(state.root, 0);
+    listEl.scrollTop = keepScroll;   // 重绘不把用户看的位置顶掉
     markCurrent();
   }
 
-  /** 当前文件高亮 + 滚动到可见 */
+  /** 当前文件高亮（不动滚动位置） */
   function markCurrent() {
     if (!listEl || !state.current) return;
     var rows = listEl.querySelectorAll('.mf-lib-row');
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].getAttribute('data-path') !== state.current) continue;
       rows[i].classList.add('mf-lib-current');
+      return;
+    }
+  }
+
+  /**
+   * 把当前文件滚到可见。只在「打开/揭示某个文件」时调用 —— 外部变化
+   * 刷新树时不能滚，否则用户正在看的位置会被拽走，看起来像树自己动了。
+   */
+  function scrollCurrentIntoView() {
+    if (!listEl || !state.current) return;
+    var rows = listEl.querySelectorAll('.mf-lib-row');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-path') !== state.current) continue;
       if (typeof rows[i].scrollIntoView === 'function') {
         rows[i].scrollIntoView({ block: 'nearest' });
       }
@@ -202,12 +259,12 @@
     writeStore(STORE_EXPANDED, state.expanded);
 
     var missing = dirs.filter(function (d) { return !state.cache[d]; });
-    if (!missing.length) { render(); return; }
+    if (!missing.length) { render(); scrollCurrentIntoView(); return; }
     var left = missing.length;
     missing.forEach(function (d) {
       loadDir(d, function () {
         left--;
-        if (left === 0) render();
+        if (left === 0) { render(); scrollCurrentIntoView(); }
       });
     });
   }
@@ -229,7 +286,9 @@
   // ---------- 交互 ----------
 
   function toggleDir(path) {
-    if (state.expanded[path]) {
+    // 只有「真的展开了」才收起。记着展开但内容没拿到时这一下应当展开，
+    // 否则用户会看到点了没反应（其实是先把它从 expanded 里删掉了）
+    if (isOpen(path)) {
       delete state.expanded[path];
       writeStore(STORE_EXPANDED, state.expanded);
       render();

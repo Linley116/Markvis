@@ -927,8 +927,20 @@ final class EditorWindowController: NSWindowController {
         guard now - libWatchLastFire > 0.3 else { return }
         libWatchLastFire = now
 
-        // 整批都是我们自己刚写过的路径 → 丢掉，不去刷文件树
-        if !paths.isEmpty && paths.allSatisfy({ isSelfWrite($0) }) { return }
+        // 整批都是我们自己刚写过的路径 → 丢掉，不去刷文件树。
+        //
+        // 注意：替换文件会顺带改父目录的 mtime，FSEvents 也会把那个目录
+        // 一并报进来，而目录路径我们从来不会登记成「自写」。所以先排除
+        // 目录条目再判断；但如果整批只有目录（比如新建了一个空文件夹），
+        // 那就不能丢。
+        let fm = FileManager.default
+        let files = paths.filter { p -> Bool in
+            var isDir: ObjCBool = false
+            let exists = fm.fileExists(atPath: p, isDirectory: &isDir)
+            return !(exists && isDir.boolValue)
+        }
+        let candidates = files.isEmpty ? paths : files
+        if !candidates.isEmpty && candidates.allSatisfy({ isSelfWrite($0) }) { return }
         mfLog("library watch: \(libWatchRoot) changed \(paths.prefix(3))")
         runJS("window.MFLibrary && window.MFLibrary.changed()")
     }

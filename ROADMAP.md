@@ -1,7 +1,7 @@
 # MarkFrame 路线图
 
-> **基线 v0.10.8** · 10,596 行（engine 3,497 / html2md 311 / css 1,371 / features 1,980 / Swift 2,159 / tests 2,278）
-> **225 项断言全绿**（引擎 113 + 功能 112）+ 原生文件操作自检 + PDF 内容回归 · 包体 3.8 MB
+> **基线 v0.10.9** · 11,659 行（engine 3,497 / html2md 311 / css 1,387 / features 2,092 / Swift 2,260 / tests 2,112）
+> **228 项断言全绿**（引擎 113 + 功能 115）+ 原生文件操作自检 + PDF 内容回归 · 包体 3.8 MB
 > 仓库：<https://github.com/Linley116/markframe>
 
 图例：✅ 已完成 · 🚧 进行中 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -85,6 +85,7 @@
 | v0.10.7 | 文件树只做了 Typora 文件侧栏的主体，细节（排序、复制、新窗口、拖拽移动、最近文件夹）都还没有 | **F9b**：①**排序切换**——底部「排序」菜单：按名称 / 按修改时间 + 文件夹优先开关，偏好写 localStorage，排序参数传给原生（`library.list` 新增 `sort` / `groupDirs`，原生带 `mtime` 一起返回）；②**Duplicate**——右键「复制」走 `library.duplicate`，重名自动 `name copy.md` / `name copy 2.md`；③**在新窗口打开**——`library.openInNewWindow` → AppDelegate 的 `openFileInNewWindow`（不复用空白窗口）；④**树内拖拽移动**——行可拖，拖到目录行移动、拖到空白回根目录，拒绝移进自己的子孙（环）和覆盖同名；拖到正文按 `caretPositionFromPoint` 落光标插相对链接（走 `MF.programEdit` 可撤销）；⑤**最近文件夹 / 固定**——底部「最近」菜单：固定段 + 最近段，每条可固定/移除/切根，可清除列表（原生记在 UserDefaults，`setRoot` / `chooseRoot` / 打开文档都会记）；⑥**撤销上一次文件操作**——`library.undoFileOp`，新建/复制→删除、重命名/移动→移回，删除进废纸篓不记入（与 Typora 一致）。原生 `create/rename/delete/duplicate/move/reveal` 都加了显式 `root` 参数，自检可以在测试目录里跑；自检新增 `MARKFRAME_TEST_LIBRARY_OPS` 真实跑一遍 create→duplicate×2→rename→move→(拒绝自嵌套)→undo，断言命名去重、循环拒绝、撤销还原；三种排序模式用错开时间戳的 fixture 验证。新增 9 项 JS 断言 |
 
 | v0.10.8 | 边打字文件树每 1.2s 刷新一次（v0.10.4 的 FSEvents 监听被自动保存触发）；另外「快速打开」缺失 | ①**修监听自触发**：自动保存/Cmd+S 改用自实现的 `writeAtomic`（临时文件自己命名 `.mf-tmp-<uuid>`，系统 `write(atomically:)` 的随机临时名认不出来），写盘前把「目标 + 临时」两个路径登记进 `selfWritePaths`；FSEvents 加 `kFSEventStreamCreateFlagFileEvents` 拿到具体文件路径，一批事件全是自己刚写过的路径就整批丢弃。**坑**：FSEvents 报的是真实路径（`/tmp` → `/private/tmp` 软链），两侧要统一去掉 `/private` 前缀才对得上（`URL.resolvingSymlinksInPath()` 在这不起作用）。文件树自身的增删改名也照样登记。自检新增 `MARKFRAME_TEST_AUTOSAVE`（打开文档后连写两次，监听日志应为 0 条；外部改动仍应为 1 条）。②**F11 快速打开**：新增 `features/quickopen.js` + 原生 `library.allFiles`（遍历根目录、按类型过滤、最多 5000 条、按修改时间倒序）；子序列模糊匹配（开头/分词边界/文件名命中加分），↑↓ 选择、Enter 打开、Esc 关闭、点遮罩关闭，清单缓存 30s（文件树变了作废）。`Cmd+Shift+P` + 文件菜单「快速打开…」（`Cmd+P` 留给 `F18` 打印）。新增 6 项断言 |
+| v0.10.9 | 打开文件夹后，鼠标移到某个文件夹上，已展开的层级会自己收起来（箭头还开着，里面却是空的） | 根因是刷新只重拉根目录：`refresh()` 把整棵缓存清空后只 `loadDir(root)`，已展开的子目录拿不到内容，`treeHTML` 就不渲染子项；而 `state.expanded` 还留着 `true`，于是箭头朝下、内容为空，再点一下反而变成「收起」。三处修：①`refresh()` 改成「根 + 所有已展开且已加载的目录」一起重拉（`loadDir(path, cb, force)`），期间继续用旧缓存渲染、全部回来再一次性重绘，不闪不塌；②新增 `isOpen(path)` = 展开 **且** 有缓存，箭头、递归、点击三处统一用它，渲染状态和真实状态不再错位；③重绘保留 `scrollTop`，并把对当前文件的强制 `scrollIntoView` 从 `render()` 挪到 `revealFile()`，刷新不会把用户正在看的位置拽走。原生侧：判断「这批事件是不是自己写盘」时先排除目录条目——替换文件会连带改父目录 mtime，而目录路径从来不会登记成自写，不排除的话每次自动保存都被判成外部改动白刷一次；整批只有目录（新建空文件夹）时仍然通知。新增 4 项断言；`MARKFRAME_TEST_AUTOSAVE` 自检复测：连续两次自动保存，监听日志 0 条，外部改动仍 1 条 |
 ---
 
 ## 五、已知限制（面向使用者）

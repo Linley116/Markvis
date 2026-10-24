@@ -500,6 +500,26 @@ const TABLE_MD = [
     const afterExpand = Array.from(document.querySelectorAll('.mf-lib-row'))
       .map(r => r.querySelector('.mf-lib-name').textContent);
 
+    // 鼠标悬停在已展开的文件夹上：不该有任何状态变化（曾经以为 hover 会收起）
+    const dirRow = document.querySelector('.mf-lib-row[data-path="/root/notes"]');
+    ['mouseover', 'mouseenter', 'mousemove'].forEach(t => {
+      dirRow.dispatchEvent(new MouseEvent(t, { bubbles: t !== 'mouseenter' }));
+    });
+    await wait(150);
+    const afterHover = Array.from(document.querySelectorAll('.mf-lib-row'))
+      .map(r => r.querySelector('.mf-lib-name').textContent);
+
+    // 原生监听通知（FSEvents 外部改动）触发刷新：已展开的层级不能塌回去
+    window.MFLibrary.changed();
+    await wait(700);
+    const afterRefresh = {
+      rows: Array.from(document.querySelectorAll('.mf-lib-row'))
+        .map(r => r.querySelector('.mf-lib-name').textContent),
+      // 刷新要连已展开的子目录一起重拉，只拉根目录就会丢内容
+      recentLists: calls.filter(c => c.name === 'library.list')
+        .slice(-2).map(c => c.data.path)
+    };
+
     document.querySelector('.mf-lib-row[data-path="/root/a.md"]').click();
     await wait(60);
     const openCall = calls.filter(c => c.name === 'document.openPath').pop();
@@ -553,7 +573,7 @@ const TABLE_MD = [
 
     window.bridge.callHandler = orig;
     return {
-      tabState, rows, afterExpand, openCall,
+      tabState, rows, afterExpand, afterHover, afterRefresh, openCall,
       rectLeft: Math.round(rect.left),
       margin, createCall, deleteCall,
       followed, rootbar,
@@ -563,6 +583,14 @@ const TABLE_MD = [
   check('根目录列出条目', lib.rows.length === 3 && lib.rows[0].name === 'notes', JSON.stringify(lib.rows));
   check('目录排在文件前', lib.rows[0].dir === true && lib.rows[1].dir === false, JSON.stringify(lib.rows));
   check('点目录展开子级', lib.afterExpand.indexOf('deep.md') >= 0, JSON.stringify(lib.afterExpand));
+  check('悬停在已展开的文件夹上不会收起', JSON.stringify(lib.afterHover) === JSON.stringify(lib.afterExpand),
+        JSON.stringify(lib.afterHover));
+  check('外部变化刷新后展开的层级不塌回去',
+        JSON.stringify(lib.afterRefresh.rows) === JSON.stringify(lib.afterExpand),
+        JSON.stringify(lib.afterRefresh));
+  check('刷新连已展开的子目录一起重拉',
+        lib.afterRefresh.recentLists.indexOf('/root/notes') >= 0,
+        JSON.stringify(lib.afterRefresh.recentLists));
   check('点文件走 document.openPath', lib.openCall && lib.openCall.data.path === '/root/a.md', JSON.stringify(lib.openCall));
   check('打开即切到文件 tab 并隐藏大纲',
         lib.tabState.activeTab === 'files' && lib.tabState.filesShown === true &&
