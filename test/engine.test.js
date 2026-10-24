@@ -81,7 +81,7 @@ function check(name, cond, extra) {
 
   console.log('\n[3] DOM -> Markdown 往返');
   const md = await page.evaluate(() => window.__getMarkdown());
-  check('保留 ATX 标题', /^# MarkFrame$/m.test(md) && /^## 它复刻了什么$/m.test(md));
+  check('保留 ATX 标题', /^# Markvis$/m.test(md) && /^## 它复刻了什么$/m.test(md));
   check('保留粗体标记', md.includes('**Typora 架构**'));
   check('保留行内代码', md.includes('`原生 Cocoa 外壳 + WKWebView`'));
   check('保留围栏与语言', md.includes('```js'));
@@ -160,7 +160,7 @@ function check(name, cond, extra) {
   check('进入源码模式', src.inSource);
   check('源码内容与 Markdown 一致', src.text.trim() === src.text.trim() && src.text.length > 100);
   check('退出后恢复 Live', src.mode === 'Live');
-  check('往返后内容仍在', src.after.includes('# MarkFrame'));
+  check('往返后内容仍在', src.after.includes('# Markvis'));
 
   console.log('\n[6.1] Cmd+/ 双向切换（回归：焦点在源码框里切不回来）');
   await page.evaluate(async () => {

@@ -1,12 +1,12 @@
 <div align="center">
 
-# MarkFrame
+# Markvis
 
 **按 Typora 的架构实现的 macOS Markdown 编辑器 —— 原生 Cocoa 外壳 + WKWebView，不是 Electron。**
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![CI](https://github.com/Linley116/markframe/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/markframe/actions/workflows/ci.yml)
+[![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -19,7 +19,7 @@
 
 ### 这是什么
 
-MarkFrame 是一个 macOS 上的所见即所得 Markdown 编辑器：在实时预览的正文里写 Markdown，导出排版好的 A4 PDF。
+Markvis 是一个 macOS 上的所见即所得 Markdown 编辑器：在实时预览的正文里写 Markdown，导出排版好的 A4 PDF。
 
 它起初是个实验：我先用 REA（Reverse Engineer Anything）逆向了 Typora 的架构，再照着同样的设计从零实现了一遍，看看这些设计是否真的立得住。结论是立得住，关键实现都写在代码和注释里。
 
@@ -29,9 +29,9 @@ MarkFrame 是一个 macOS 上的所见即所得 Markdown 编辑器：在实时�
 
 ### 为什么它不是 Electron
 
-Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是：
+Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 
-| | Electron 应用 | MarkFrame |
+| | Electron 应用 | Markvis |
 |---|---|---|
 | 包体 | 约 150 MB | **约 3.8 MB**（其中约 2.5 MB 是 Mermaid） |
 | 运行时 | Chromium + Node | 系统 WebKit |
@@ -99,7 +99,7 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 | `WKWebView.printOperation(with:)` | 十万级空白页，150 MB+ |
 | `NSPrintOperation(view:)` | 页数正常，但每页全白（WebKit 内容在独立进程里渲染） |
 
-所以 MarkFrame 自己做分页：
+所以 Markvis 自己做分页：
 
 1. **JS 排版**：把块装进 A4 页框（794 × 1123 px → 595 × 842 pt）。高过一页的块（表格、代码、列表、引用）按行 / 按项拆段，同一块的续段绝不和它的前一段落在同一页。
 2. **逐页捕获**：原生在独立离屏 `WKWebView` 里一页一页 `createPDF`，每次只截一个精确的页面矩形。
@@ -116,7 +116,7 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 
 ### 自定义主题
 
-主题就是一份普通的 CSS。把文件丢进 `~/Library/Application Support/MarkFrame/themes/`，它就会出现在右下角的主题菜单里（首次启动会自动建好目录并放一份带注释的 `example.css`；菜单 →「打开主题文件夹…」也能直接跳过去）。
+主题就是一份普通的 CSS。把文件丢进 `~/Library/Application Support/Markvis/themes/`，它就会出现在右下角的主题菜单里（首次启动会自动建好目录并放一份带注释的 `example.css`；菜单 →「打开主题文件夹…」也能直接跳过去）。
 
 ```css
 /* @name: 纸墨 */
@@ -145,18 +145,18 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 要求：macOS 13+、Swift 6 工具链（`xcode-select --install`）。构建本身不需要 npm、不需要 Xcode 工程、运行时没有第三方依赖；只有跑 JS 测试才用得到 `playwright-core`。
 
 ```bash
-git clone https://github.com/Linley116/markframe.git
-cd markframe
+git clone https://github.com/Linley116/Markvis.git
+cd markvis
 ./build.sh          # 编译 + 安装到 ~/Applications
 ```
 
-`build.sh` 用 `swiftc` 编译五个 Swift 文件、组装 `.app`、ad-hoc 签名，并只往 `~/Applications` 装一份（避免启动台出现重复图标）。源码是你自己拉的、产物是你自己编的，本地运行不需要 Apple 公证。
+`build.sh` 用 `swiftc` 编译六个 Swift 文件、组装 `.app`、ad-hoc 签名，并只往 `~/Applications` 装一份（避免启动台出现重复图标）。源码是你自己拉的、产物是你自己编的，本地运行不需要 Apple 公证。
 
 只构建、不安装：
 
 ```bash
-./build.sh --keep                    # 保留 build/MarkFrame.app
-MARKFRAME_NO_INSTALL=1 ./build.sh --keep   # 只构建，不动 ~/Applications
+./build.sh --keep                    # 保留 build/Markvis.app
+MARKVIS_NO_INSTALL=1 ./build.sh --keep   # 只构建，不动 ~/Applications
 ```
 
 DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用；它产出 ad-hoc 签名、未公证的 DMG，**不要作为公开下载**，别人打开时会被 Gatekeeper 拦截。
@@ -191,7 +191,7 @@ node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
 ```
 
-JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开发依赖，`npm ci` 后执行 `playwright-core install chromium` 即可；也可用 `MARKFRAME_TEST_CHROME` 指定浏览器）。原生套件覆盖路径安全、会话恢复、文件操作与撤销、文件树排序和快速打开索引；完整 Xcode 下走 XCTest，只有 Command Line Tools 时自动使用同一组场景的轻量运行器。PDF 回归会导出一份包含 60 行表格、80 行代码块和结尾标记的文档，然后检查：多页、无空白页、A4 尺寸一致、填充率、结尾标记是否还在。
+JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开发依赖，`npm ci` 后执行 `playwright-core install chromium` 即可；也可用 `MARKVIS_TEST_CHROME` 指定浏览器）。原生套件覆盖路径安全、会话恢复、文件操作与撤销、文件树排序和快速打开索引；完整 Xcode 下走 XCTest，只有 Command Line Tools 时自动使用同一组场景的轻量运行器。PDF 回归会导出一份包含 60 行表格、80 行代码块和结尾标记的文档，然后检查：多页、无空白页、A4 尺寸一致、填充率、结尾标记是否还在。
 
 ### 已知限制
 

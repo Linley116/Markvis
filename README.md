@@ -1,12 +1,12 @@
 <div align="center">
 
-# MarkFrame
+# Markvis
 
 **A Markdown editor for macOS built the way Typora is built — native Cocoa shell + WKWebView, no Electron.**
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![CI](https://github.com/Linley116/markframe/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/markframe/actions/workflows/ci.yml)
+[![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -18,7 +18,7 @@ English · [简体中文](README.zh-CN.md)
 
 ### What is this
 
-MarkFrame is a WYSIWYG Markdown editor for macOS. You type Markdown in a live-preview surface, and export to a print-quality A4 PDF.
+Markvis is a WYSIWYG Markdown editor for macOS. You type Markdown in a live-preview surface, and export to a print-quality A4 PDF.
 
 It started as an experiment: I reverse-engineered Typora's architecture with REA (Reverse Engineer Anything), then rebuilt the same design from scratch to see whether the ideas actually hold up. They do — and the interesting parts are documented in the code.
 
@@ -28,9 +28,9 @@ It is **not** a Typora replacement and does not aim to be. It is a working, read
 
 ### Why it is not Electron
 
-Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does the same:
+Typora on macOS is a native Cocoa shell that hosts a WKWebView. Markvis does the same:
 
-| | Electron apps | MarkFrame |
+| | Electron apps | Markvis |
 |---|---|---|
 | Binary size | ~150 MB | **~3.8 MB** (about 2.5 MB of it is Mermaid) |
 | Runtime | Chromium + Node | System WebKit |
@@ -98,7 +98,7 @@ WebKit's own printing is unusable here — measured, not assumed:
 | `WKWebView.printOperation(with:)` | ~100,000 blank pages, 150 MB+ |
 | `NSPrintOperation(view:)` | Correct page count, but every page is blank (WebKit renders out of process) |
 
-So MarkFrame paginates by itself:
+So Markvis paginates by itself:
 
 1. **Layout in JS.** Blocks are poured into A4 page boxes (794 × 1123 px → 595 × 842 pt). Blocks taller than a page (tables, code, lists, quotes) are split at row / line / item boundaries; a continuation chunk is never placed on the same page as its predecessor.
 2. **Capture per page.** Native renders one page at a time in a dedicated off-screen `WKWebView` and calls `createPDF` with an exact page rect.
@@ -115,7 +115,7 @@ Four things that silently broke and are now pinned by tests:
 
 ### Custom themes
 
-Themes are plain CSS. Drop a file into `~/Library/Application Support/MarkFrame/themes/` and it appears in the theme menu at the bottom-right (the folder is created on first launch with a commented `example.css`; View → Open Theme Folder… jumps there).
+Themes are plain CSS. Drop a file into `~/Library/Application Support/Markvis/themes/` and it appears in the theme menu at the bottom-right (the folder is created on first launch with a commented `example.css`; View → Open Theme Folder… jumps there).
 
 ```css
 /* @name: Paper */
@@ -144,18 +144,18 @@ Themes are plain CSS. Drop a file into `~/Library/Application Support/MarkFrame/
 Requirements: macOS 13+, Swift 6 toolchain (`xcode-select --install`). The build itself needs no npm, no Xcode project, and no runtime dependencies; `playwright-core` is only used by the JS tests.
 
 ```bash
-git clone https://github.com/Linley116/markframe.git
-cd markframe
+git clone https://github.com/Linley116/Markvis.git
+cd markvis
 ./build.sh          # compile + install to ~/Applications
 ```
 
-`build.sh` compiles five Swift files with `swiftc`, assembles the `.app` bundle, ad-hoc signs it, and installs a single visible copy to `~/Applications` (so Launchpad does not show duplicates). Because you built it locally, it runs without Apple notarization.
+`build.sh` compiles six Swift files with `swiftc`, assembles the `.app` bundle, ad-hoc signs it, and installs a single visible copy to `~/Applications` (so Launchpad does not show duplicates). Because you built it locally, it runs without Apple notarization.
 
 Build without installing:
 
 ```bash
-./build.sh --keep                    # leaves build/MarkFrame.app in place
-MARKFRAME_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alone
+./build.sh --keep                    # leaves build/Markvis.app in place
+MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alone
 ```
 
 `release.sh` is a maintainer-only convenience for local DMG packaging. Its output is ad-hoc signed and not notarized — **do not publish it as a download**, because Gatekeeper will block it on other Macs.
@@ -190,7 +190,7 @@ node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
 ```
 
-The JS suites drive real DOM in headless Chrome (`playwright-core` is the only dev dependency; run `npm ci` then `playwright-core install chromium`, or point `MARKFRAME_TEST_CHROME` at a browser). The native suite covers path safety, session restore, file operations and undo, tree sorting, and the Quick Open index; it runs under XCTest when Xcode is available and falls back to a lightweight runner using the same scenarios with Command Line Tools only. The PDF regression exports a document containing a 60-row table, an 80-line code block and an end marker, then checks: multiple pages, no blank page, uniform A4 size, fill ratio, and that the marker survived.
+The JS suites drive real DOM in headless Chrome (`playwright-core` is the only dev dependency; run `npm ci` then `playwright-core install chromium`, or point `MARKVIS_TEST_CHROME` at a browser). The native suite covers path safety, session restore, file operations and undo, tree sorting, and the Quick Open index; it runs under XCTest when Xcode is available and falls back to a lightweight runner using the same scenarios with Command Line Tools only. The PDF regression exports a document containing a 60-row table, an 80-line code block and an end marker, then checks: multiple pages, no blank page, uniform A4 size, fill ratio, and that the marker survived.
 
 ### Known limitations
 

@@ -1,6 +1,6 @@
 import Foundation
 #if !NATIVE_TEST_HARNESS
-@testable import MarkFrame
+@testable import Markvis
 #endif
 
 struct NativeTestFailure: Error, CustomStringConvertible {
@@ -13,7 +13,7 @@ func nativeExpect(_ condition: @autoclosure () -> Bool, _ message: String) throw
 
 private func withTempLibrary(_ body: (URL) throws -> Void) throws {
     let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("MarkFrameTests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("MarkvisTests-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
     try body(root)
@@ -32,10 +32,10 @@ func nativeScenarioPaths() throws {
     try nativeExpect(MFPath.real("/private/tmp/a.md") == "/tmp/a.md", "FSEvents 路径归一化")
     try nativeExpect(MFPath.real("/Users/test/a.md") == "/Users/test/a.md", "普通路径保持不变")
 
-    let root = "/tmp/markframe-root"
-    try nativeExpect(MFPath.entry("/tmp/markframe-root/a.md", root: root)?.path == "/tmp/markframe-root/a.md", "允许根内文件")
-    try nativeExpect(MFPath.entry("/tmp/markframe-root/../secret.md", root: root) == nil, "拒绝 ../ 穿越")
-    try nativeExpect(MFPath.entry("/tmp/markframe-root-other/a.md", root: root) == nil, "拒绝同前缀兄弟目录")
+    let root = "/tmp/markvis-root"
+    try nativeExpect(MFPath.entry("/tmp/markvis-root/a.md", root: root)?.path == "/tmp/markvis-root/a.md", "允许根内文件")
+    try nativeExpect(MFPath.entry("/tmp/markvis-root/../secret.md", root: root) == nil, "拒绝 ../ 穿越")
+    try nativeExpect(MFPath.entry("/tmp/markvis-root-other/a.md", root: root) == nil, "拒绝同前缀兄弟目录")
     try nativeExpect(MFPath.entry(root, root: root) == nil, "文件操作不直接接受根本身")
     try nativeExpect(MFPath.entry("", root: root) == nil, "拒绝空路径")
 }

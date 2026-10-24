@@ -8,7 +8,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$HOME/Applications/MarkFrame.app/Contents/MacOS/MarkFrame"
+APP="$HOME/Applications/Markvis.app/Contents/MacOS/Markvis"
 TMP="$(mktemp -d)"
 APP_PID=0
 cleanup() {
@@ -49,7 +49,7 @@ open(sys.argv[1], 'w').write('\n'.join(parts))
 PY
 
 echo "==> 导出中…"
-MARKFRAME_EXPORT_PDF="$TMP/out.pdf" "$APP" "$TMP/doc.md" >/dev/null 2>&1 &
+MARKVIS_EXPORT_PDF="$TMP/out.pdf" "$APP" "$TMP/doc.md" >/dev/null 2>&1 &
 APP_PID=$!
 
 # 不按固定秒数猜：等文件出现且大小连续两秒不变，慢的 CI 也能跑完

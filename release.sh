@@ -1,41 +1,41 @@
 #!/bin/zsh
 # 构建可分发的 DMG。
 #   ./release.sh                  仅打包（ad-hoc 签名，未公证）
-#   MARKFRAME_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" ./release.sh
+#   MARKVIS_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" ./release.sh
 #                                 用 Developer ID 签名
 #   再提供 Apple 公证凭据即自动提交公证并装订票据：
 #     APPLE_ID=... APPLE_TEAM_ID=... APPLE_APP_PASSWORD=... ./release.sh
 #   或使用已保存的 notarytool 钥匙串配置：
-#     MARKFRAME_NOTARY_PROFILE=markframe ./release.sh
+#     MARKVIS_NOTARY_PROFILE=markvis ./release.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP="$ROOT/build/MarkFrame.app"
+APP="$ROOT/build/Markvis.app"
 DIST="$ROOT/dist"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT/Info.plist")"
-DMG="$DIST/MarkFrame-$VERSION.dmg"
-IDENTITY="${MARKFRAME_SIGN_IDENTITY:-}"
+DMG="$DIST/Markvis-$VERSION.dmg"
+IDENTITY="${MARKVIS_SIGN_IDENTITY:-}"
 
 if [[ "$IDENTITY" == "-" ]]; then IDENTITY=""; fi
 
 echo "==> build $VERSION"
-MARKFRAME_NO_INSTALL=1 "$ROOT/build.sh" --keep >/dev/null
+MARKVIS_NO_INSTALL=1 "$ROOT/build.sh" --keep >/dev/null
 
 if [[ -n "$IDENTITY" ]]; then
   echo "==> sign with $IDENTITY"
   codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
   codesign --verify --deep --strict --verbose=2 "$APP"
 else
-  echo "==> no MARKFRAME_SIGN_IDENTITY：保留 ad-hoc 签名"
+  echo "==> no MARKVIS_SIGN_IDENTITY：保留 ad-hoc 签名"
 fi
 
 echo "==> stage DMG"
 STAGE="$ROOT/build/dmg-stage"
 mkdir -p "$STAGE" "$DIST"
 # ditto 覆盖而不是先 rm -rf：构建目录也遵守本机的批量删除保护
-ditto "$APP" "$STAGE/MarkFrame.app"
+ditto "$APP" "$STAGE/Markvis.app"
 ln -sfn /Applications "$STAGE/Applications"
-hdiutil create -quiet -volname "MarkFrame $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+hdiutil create -quiet -volname "Markvis $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 hdiutil verify -quiet "$DMG"
 
 if [[ -n "$IDENTITY" ]]; then
@@ -43,8 +43,8 @@ if [[ -n "$IDENTITY" ]]; then
 fi
 
 NOTARY_ARGS=()
-if [[ -n "${MARKFRAME_NOTARY_PROFILE:-}" ]]; then
-  NOTARY_ARGS=(--keychain-profile "$MARKFRAME_NOTARY_PROFILE")
+if [[ -n "${MARKVIS_NOTARY_PROFILE:-}" ]]; then
+  NOTARY_ARGS=(--keychain-profile "$MARKVIS_NOTARY_PROFILE")
 elif [[ -n "${APPLE_ID:-}" && -n "${APPLE_TEAM_ID:-}" && -n "${APPLE_APP_PASSWORD:-}" ]]; then
   NOTARY_ARGS=(--apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD")
 fi

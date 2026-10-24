@@ -71,12 +71,12 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
             respond(nil)
 
         case "app.ready":
-            NSLog("MarkFrame: web layer ready")
+            NSLog("Markvis: web layer ready")
             controller?.startLibraryWatch() // 文件树开始监听根目录变化
 
-            // 自检：MARKFRAME_TEST_AUTOSAVE 时，等文档加载完连着自动保存两次，
+            // 自检：MARKVIS_TEST_AUTOSAVE 时，等文档加载完连着自动保存两次，
             // 用来验证「自己写盘不会触发文件树刷新」（监听日志里不该出现记录）
-            if ProcessInfo.processInfo.environment["MARKFRAME_TEST_AUTOSAVE"] != nil,
+            if ProcessInfo.processInfo.environment["MARKVIS_TEST_AUTOSAVE"] != nil,
                let c = controller {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                     mfLog("selftest autosave: path=\(c.currentPath.isEmpty ? "(empty)" : c.currentPath)" +
@@ -87,14 +87,14 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                     }
                 }
             }
-            // 构建自检：仅当显式设置 MARKFRAME_SELFTEST 时落一份就绪标记
-            if let marker = ProcessInfo.processInfo.environment["MARKFRAME_SELFTEST"] {
+            // 构建自检：仅当显式设置 MARKVIS_SELFTEST 时落一份就绪标记
+            if let marker = ProcessInfo.processInfo.environment["MARKVIS_SELFTEST"] {
                 let info = (data as? [String: Any])?["version"] as? String ?? "?"
                 try? "ready \(info)".write(toFile: marker, atomically: true, encoding: .utf8)
             }
-            // 文件树自检：MARKFRAME_TEST_LIBRARY=<marker> 时把某个目录的清单写成 JSON
-            if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY"] {
-                let dir = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY_DIR"] ?? ""
+            // 文件树自检：MARKVIS_TEST_LIBRARY=<marker> 时把某个目录的清单写成 JSON
+            if let marker = ProcessInfo.processInfo.environment["MARKVIS_TEST_LIBRARY"] {
+                let dir = ProcessInfo.processInfo.environment["MARKVIS_TEST_LIBRARY_DIR"] ?? ""
                 // 自检时把测试目录当根目录用，不污染用户的根目录偏好
                 let list = controller?.libraryList(path: dir, root: dir.isEmpty ? nil : dir) ?? []
                 let summary: [String: Any] = [
@@ -107,9 +107,9 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                     try? json.write(toFile: marker, atomically: true, encoding: .utf8)
                 }
             }
-            // 文件树自检：MARKFRAME_TEST_LIBRARY=<marker> 时把某个目录的清单写成 JSON
-            if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY"] {
-                let dir = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY_DIR"] ?? ""
+            // 文件树自检：MARKVIS_TEST_LIBRARY=<marker> 时把某个目录的清单写成 JSON
+            if let marker = ProcessInfo.processInfo.environment["MARKVIS_TEST_LIBRARY"] {
+                let dir = ProcessInfo.processInfo.environment["MARKVIS_TEST_LIBRARY_DIR"] ?? ""
                 // 自检时把测试目录当根目录，不污染用户的根目录偏好
                 let list = controller?.libraryList(path: dir, root: dir.isEmpty ? nil : dir) ?? []
                 let summary: [String: Any] = [
@@ -122,10 +122,10 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                     try? json.write(toFile: marker, atomically: true, encoding: .utf8)
                 }
 
-                // F9b 自检：MARKFRAME_TEST_LIBRARY_OPS=<marker> 时在测试目录里
+                // F9b 自检：MARKVIS_TEST_LIBRARY_OPS=<marker> 时在测试目录里
                 // 真跑一遍 create / duplicate / rename / move / undo，验证原生逻辑。
                 // root 全程显式传测试目录，不动用户的根目录偏好。
-                if let opsMarker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_LIBRARY_OPS"],
+                if let opsMarker = ProcessInfo.processInfo.environment["MARKVIS_TEST_LIBRARY_OPS"],
                    !dir.isEmpty,
                    let c = controller {
                     let root = dir
@@ -161,8 +161,8 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
                     }
                 }
             }
-            // 自定义主题自检：MARKFRAME_TEST_THEMES=<marker> 时把主题清单写成 JSON
-            if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_THEMES"] {
+            // 自定义主题自检：MARKVIS_TEST_THEMES=<marker> 时把主题清单写成 JSON
+            if let marker = ProcessInfo.processInfo.environment["MARKVIS_TEST_THEMES"] {
                 let list = controller?.themeList() ?? []
                 let ids = list.compactMap { $0["id"] as? String }
                 let firstCSS = ids.first.flatMap { controller?.themeCSS(id: $0)?["css"] as? String } ?? ""
@@ -335,7 +335,7 @@ final class Bridge: NSObject, WKScriptMessageHandler, WKUIDelegate {
 // MARK: - 诊断日志（NSLog 在重定向场景下不进 stderr）
 
 func mfLog(_ s: String) {
-    FileHandle.standardError.write(("[MarkFrame] " + s + "\n").data(using: .utf8)!)
+    FileHandle.standardError.write(("[Markvis] " + s + "\n").data(using: .utf8)!)
 }
 
 // MARK: - JSON 辅助
@@ -403,11 +403,11 @@ final class EditorWindowController: NSWindowController {
 
     // MARK: 崩溃恢复
 
-    /// ~/Library/Application Support/MarkFrame/Recovery
+    /// ~/Library/Application Support/Markvis/Recovery
     static let recoveryDir: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return base.appendingPathComponent("MarkFrame/Recovery", isDirectory: true)
+        return base.appendingPathComponent("Markvis/Recovery", isDirectory: true)
     }()
 
     /// 上次会话遗留的恢复文件（按修改时间倒序，超过 30 天的顺手删掉）
@@ -471,11 +471,11 @@ final class EditorWindowController: NSWindowController {
 
     // MARK: 自定义主题
 
-    /// ~/Library/Application Support/MarkFrame/themes
+    /// ~/Library/Application Support/Markvis/themes
     static let themesDir: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return base.appendingPathComponent("MarkFrame/themes", isDirectory: true)
+        return base.appendingPathComponent("Markvis/themes", isDirectory: true)
     }()
 
     /// 目录不存在就建；里面一个 .css 都没有时，拷一份带注释的示例进去当文档
@@ -1074,9 +1074,9 @@ final class EditorWindowController: NSWindowController {
         window.title = L10n.t("Untitled", "未命名")
         window.minSize = NSSize(width: 560, height: 420)
         window.center()
-        window.setFrameAutosaveName("MarkFrameMainWindow")
+        window.setFrameAutosaveName("MarkvisMainWindow")
         window.tabbingMode = .preferred
-        window.tabbingIdentifier = "MarkFrame"
+        window.tabbingIdentifier = "Markvis"
         self.init(window: window)
 
         let config = WKWebViewConfiguration()
@@ -1117,23 +1117,23 @@ final class EditorWindowController: NSWindowController {
         webView.navigationDelegate = self
         webView.loadFileURL(index, allowingReadAccessTo: webDir)
 
-        // 自动化验证入口：设置 MARKFRAME_EXPORT_PDF=/tmp/x.pdf 时，
+        // 自动化验证入口：设置 MARKVIS_EXPORT_PDF=/tmp/x.pdf 时，
         // 启动后自动导出一次 PDF（跳过保存面板）
-        if let pdfPath = ProcessInfo.processInfo.environment["MARKFRAME_EXPORT_PDF"] {
+        if let pdfPath = ProcessInfo.processInfo.environment["MARKVIS_EXPORT_PDF"] {
             startAutomatedExport(to: pdfPath)
         }
 
-        // 自动化验证入口：设置 MARKFRAME_TEST_RECOVERY=<文本> 时模拟一次自动保存，
+        // 自动化验证入口：设置 MARKVIS_TEST_RECOVERY=<文本> 时模拟一次自动保存，
         // 用来验证「未命名文档 → 恢复目录」这条链路（正常由 web 层每 1.2s 触发）
-        if let text = ProcessInfo.processInfo.environment["MARKFRAME_TEST_RECOVERY"] {
+        if let text = ProcessInfo.processInfo.environment["MARKVIS_TEST_RECOVERY"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 self?.writeSilently(content: text)
                 mfLog("test recovery written")
             }
         }
 
-        // 自动化验证入口：设置 MARKFRAME_TEST_IMAGE=<marker> 时写入一张 1x1 PNG 并回报路径
-        if let marker = ProcessInfo.processInfo.environment["MARKFRAME_TEST_IMAGE"] {
+        // 自动化验证入口：设置 MARKVIS_TEST_IMAGE=<marker> 时写入一张 1x1 PNG 并回报路径
+        if let marker = ProcessInfo.processInfo.environment["MARKVIS_TEST_IMAGE"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 let b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
                 let rel = self?.saveImage(base64: b64, ext: "png") ?? "FAILED"
@@ -1578,7 +1578,7 @@ final class EditorWindowController: NSWindowController {
         // 打印壳在临时目录里，读不到文档目录的图片：先内联成 data URL
         let html = inlineImages(in: injectCSS(into: shellHTML))
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("markframe-print-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("markvis-print-\(UUID().uuidString)", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         } catch {

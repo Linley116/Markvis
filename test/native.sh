@@ -7,7 +7,7 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEV_DIR="$(xcode-select -p 2>/dev/null || true)"
 
-if [[ "${MARKFRAME_FORCE_HARNESS:-0}" != "1" && "$DEV_DIR" == *".app/Contents/Developer"* ]]; then
+if [[ "${MARKVIS_FORCE_HARNESS:-0}" != "1" && "$DEV_DIR" == *".app/Contents/Developer"* ]]; then
   # 本机部分终端环境不允许 SwiftPM 再套一层 sandbox-exec；
   # 项目没有插件或构建工具，关闭 SwiftPM 自身沙箱不影响测试隔离。
   exec swift test --disable-sandbox --package-path "$ROOT" "$@"
@@ -19,6 +19,7 @@ swiftc -swift-version 5 -D NATIVE_TEST_HARNESS \
   "$ROOT/Sources/App.swift" \
   "$ROOT/Sources/L10n.swift" \
   "$ROOT/Sources/NativeSupport.swift" \
+  "$ROOT/Sources/Migration.swift" \
   "$ROOT/Sources/EditorWindow.swift" \
   "$ROOT/test/NativeTests/NativeScenarios.swift" \
   "$ROOT/test/NativeTests/main.swift" \

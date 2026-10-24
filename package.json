@@ -1,6 +1,6 @@
 {
-  "name": "markframe",
-  "version": "0.11.1",
+  "name": "markvis",
+  "version": "0.12.0",
   "private": true,
   "description": "Native Cocoa + WKWebView Markdown editor for macOS",
   "scripts": {

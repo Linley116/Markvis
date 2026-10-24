@@ -1,4 +1,4 @@
-// MarkFrame 入口
+// Markvis 入口
 // 原生 Cocoa 外壳：NSApplication + 菜单 + WKWebView 承载编辑器
 
 import Cocoa

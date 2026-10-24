@@ -32,11 +32,11 @@ const SYSTEM_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chr
 
 // 本地继续用系统 Chrome（一次性 profile）；CI 没有系统 Chrome 时，
 // 使用 `playwright-core install chromium` 下载的独立浏览器。
-// 也可用 MARKFRAME_TEST_CHROME 显式指定，不会读取或修改用户浏览器数据。
+// 也可用 MARKVIS_TEST_CHROME 显式指定，不会读取或修改用户浏览器数据。
 function resolveChrome() {
   let bundled = '';
   try { bundled = chromium.executablePath(); } catch (_) {}
-  const candidates = [process.env.MARKFRAME_TEST_CHROME, SYSTEM_CHROME, bundled];
+  const candidates = [process.env.MARKVIS_TEST_CHROME, SYSTEM_CHROME, bundled];
   return candidates.find(p => p && fs.existsSync(p)) || '';
 }
 const CHROME = resolveChrome();
@@ -125,9 +125,9 @@ function installGuards() {
 // ---- 对外 API ----
 async function launchTestBrowser() {
   if (!CHROME) {
-    throw new Error('未找到测试浏览器：请安装 Google Chrome，或运行 npx playwright-core install chromium；也可用 MARKFRAME_TEST_CHROME 指定路径');
+    throw new Error('未找到测试浏览器：请安装 Google Chrome，或运行 npx playwright-core install chromium；也可用 MARKVIS_TEST_CHROME 指定路径');
   }
-  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'markframe-test-'));
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'markvis-test-'));
   const chrome = spawn(CHROME, [
     '--headless=new',
     '--remote-debugging-port=0',          // 随机端口，不冲突

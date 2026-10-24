@@ -1,5 +1,5 @@
 import XCTest
-@testable import MarkFrame
+@testable import Markvis
 
 // CI（完整 Xcode）使用 XCTest；本机只有 Command Line Tools 时，
 // test/native.sh 用 main.swift 运行同一组 NativeScenarios，不复制测试逻辑。

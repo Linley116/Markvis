@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recentKey = "recentFiles"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 品牌从 MarkFrame 改为 Markvis：先补旧偏好和主题，再碰窗口
+        LegacyMigration.run()
         NSWindow.allowsAutomaticWindowTabbing = true
         buildMenu()
 
@@ -45,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 再双击文件必须当场建窗口，否则会变成一个永远不打开的 pendingOpen。
     private var hasFinishedLaunching = false
 
-    /// 双击 .md 文件、或 `open -a MarkFrame x.md` 走这里
+    /// 双击 .md 文件、或 `open -a Markvis x.md` 走这里
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first(where: { $0.isFileURL }) else { return }
         openFile(at: url.path)
@@ -167,13 +169,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 崩溃恢复
 
     /// 启动时检查恢复目录；有东西就问一句，用户决定恢复还是丢弃。
-    /// 自动化测试（MARKFRAME_SELFTEST）下不走弹窗，直接恢复，避免阻塞启动。
+    /// 自动化测试（MARKVIS_SELFTEST）下不走弹窗，直接恢复，避免阻塞启动。
     private func recoverPendingDocuments() {
         let files = EditorWindowController.pendingRecoveryFiles()
         guard !files.isEmpty else { return }
 
         var shouldRestore = true
-        if ProcessInfo.processInfo.environment["MARKFRAME_SELFTEST"] == nil {
+        if ProcessInfo.processInfo.environment["MARKVIS_SELFTEST"] == nil {
             let alert = NSAlert()
             alert.messageText = L10n.t("Recover unsaved documents?", "恢复上次未保存的文档？")
             alert.informativeText = L10n.t(
@@ -314,15 +316,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: L10n.t("About MarkFrame", "关于 MarkFrame"),
+        appMenu.addItem(withTitle: L10n.t("About Markvis", "关于 Markvis"),
                         action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                         keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: L10n.t("Hide MarkFrame", "隐藏 MarkFrame"),
+        appMenu.addItem(withTitle: L10n.t("Hide Markvis", "隐藏 Markvis"),
                         action: #selector(NSApplication.hide(_:)),
                         keyEquivalent: "h")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: L10n.t("Quit MarkFrame", "退出 MarkFrame"),
+        appMenu.addItem(withTitle: L10n.t("Quit Markvis", "退出 Markvis"),
                         action: #selector(NSApplication.terminate(_:)),
                         keyEquivalent: "q")
 

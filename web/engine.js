@@ -1,4 +1,4 @@
-/* MarkFrame 编辑器引擎
+/* Markvis 编辑器引擎
  *
  * 实现思路（复刻 Typora 的核心架构）：
  *   Markdown  ──parse──►  Node 树  ──render──►  contenteditable DOM
@@ -3531,7 +3531,7 @@
   // =====================================================================
 
   var DEMO = [
-    '# MarkFrame',
+    '# Markvis',
     '',
     '一个按 **Typora 架构** 复刻的最小可用 Markdown 编辑器。它跑在 `原生 Cocoa 外壳 + WKWebView` 里，不是 Electron。',
     '',
