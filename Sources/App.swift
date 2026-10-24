@@ -38,7 +38,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 上次异常退出留下的未命名文档：提示恢复
         recoverPendingDocuments()
+        hasFinishedLaunching = true
     }
+
+    /// 启动完成前收到的打开请求要排队；运行中关掉所有窗口后，
+    /// 再双击文件必须当场建窗口，否则会变成一个永远不打开的 pendingOpen。
+    private var hasFinishedLaunching = false
 
     /// 双击 .md 文件、或 `open -a MarkFrame x.md` 走这里
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -46,8 +51,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openFile(at: url.path)
     }
 
+    /// macOS 默认行为是「最后一个窗口关闭就退出」。编辑器不该这样：
+    /// 关掉窗口只是收起文档，点 Dock 图标或 Cmd+N 还能继续用。
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    /// 无可见窗口时点 Dock 图标：有窗口就提到前面（最小化的先还原），
+    /// 一个窗口都不剩就新建空白窗口。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag else { return true }
+        if let wc = windowControllers.last, let w = wc.window {
+            if w.isMiniaturized { w.deminiaturize(nil) }
+            w.makeKeyAndOrderFront(nil)
+        } else {
+            _ = makeController()
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        return true
     }
 
     // MARK: - 窗口管理
@@ -190,7 +211,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 否则开新窗口（系统偏好设为「总是」时会自动并入标签组）
     func openFile(at path: String) {
         if windowControllers.isEmpty {
-            pendingOpen = path
+            guard hasFinishedLaunching else {
+                pendingOpen = path
+                return
+            }
+            let wc = makeController()
+            wc.load(path: path)
+            noteRecent(path)
             return
         }
         // 同一个文件已经在某个窗口里（含正在加载的）→ 切过去，别开第二份
@@ -216,7 +243,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 文件树右键「在新窗口打开」：不复用空白窗口，直接新建一个
     func openFileInNewWindow(at path: String) {
         if windowControllers.isEmpty {
-            pendingOpen = path
+            guard hasFinishedLaunching else {
+                pendingOpen = path
+                return
+            }
+            let wc = makeController()
+            wc.load(path: path)
+            noteRecent(path)
             return
         }
         let wc = makeController()
@@ -448,7 +481,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openDocument(_ sender: Any?) {
-        guard let wc = activeController ?? windowControllers.last else { return }
+        let wc = activeController ?? windowControllers.last ?? makeController()
         wc.openDocumentPanel()
     }
 

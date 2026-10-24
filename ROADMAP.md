@@ -1,6 +1,6 @@
 # MarkFrame 路线图
 
-> **基线 v0.11.0** · 12,250 行（engine 3,582 / html2md 311 / css 1,402 / features 2,123 / Swift 2,410 / tests 2,422）
+> **基线 v0.11.1** · 12,283 行（engine 3,582 / html2md 311 / css 1,402 / features 2,123 / Swift 2,443 / tests 2,422）
 > **239 项 JS 断言全绿**（引擎 121 + 功能 118）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.8 MB / DMG 1.7 MB
 > **CI 已跑通**：GitHub Actions run 40065959796（原生 XCTest / 构建 / JS / PDF 全部 success）
 > 仓库：<https://github.com/Linley116/markframe>
@@ -84,6 +84,7 @@
 | v0.10.10 | 在文件树里点开子文件夹、再打开里面的文件，根目录会跟着跳进那一层（打开一个文件就往里钻一层），用户选中的文件夹位置被顶掉 | 「根跟随文档」补一条边界：**文件已经在当前根之内就保持根不动**，只展开祖先并高亮；只有打开根外的文件（或还没有根）时才跟到它的父文件夹。底部操作条新增「上级目录」按钮（`parentDir(root)` → `library.setRoot`），到磁盘根时禁用并把 tooltip 改成「已经是顶层目录」，样式 `.mf-lib-act:disabled`。新增 3 项断言（根内不换根 / 根外才跟随 / 上级按钮回退且到顶层禁用） |
 | v0.10.11 | ①重启后永远是空白窗口，得重新找上次在写的文件；②同一个文件在文件树里再点一次会再开一份（同一文件两个窗口） | ①**会话恢复**：`load(path:)` 一进来就记 `intendedPath`（早于异步加载，恢复期间不会漏窗口），`persistSession()` 把「开着的文档」写进 `mf.openFiles`、活动文件写 `mf.activeFile`——加载文档、开窗、关窗、退出时更新；启动时没有命令行参数就按列表恢复：删掉的不恢复、上限 10 个、其余并进同一标签组（`addTabbedWindow`），上次活动的窗口置前。关窗时同步更新，但 `isTerminating` 期间跳过——否则退出时窗口回调会把刚存好的会话清空。②**打开去重**：`openFile(at:)` 先在所有窗口里找 `currentPath` / `intendedPath` 相同的（`resolvingSymlinksInPath` 归一化，`/tmp` 与 `/private/tmp` 算同一个文件），命中就 `makeKeyAndOrderFront` 把那个窗口提到前面，不再新建；「在新窗口打开」保持原样（显式要求新窗口）。原生改动，无新增 JS 断言（Swift 侧仍无测试目标，见 `T8`），靠启动日志实测：重复打开打印 `already open, focusing …`，重启打印 `restore session: 2 file(s)` |
 | v0.11.0 | 发布线没有 CI、原生层没有自动化测试、表格窄列折行、孤儿脚注无提示；另外快速打开返回的 `/private/var` 路径与文件树根不一致 | ①**CI**：GitHub Actions macOS runner 安装锁定的 `playwright-core` 与隔离 Chromium，依次跑原生测试、`build.sh --keep`、两套 JS 断言、PDF 回归；新增 `package-lock.json`，测试浏览器支持 `MARKFRAME_TEST_CHROME`，不再硬编码本机 Chrome。②**T8**：抽出不依赖窗口的 `MFPath`（软链比较、`/private` 归一化、根目录越界、会话恢复过滤），文件树与 AppDelegate 改为复用它；新增 7 组原生场景覆盖路径、会话、JS 字面量、文件增删改移/撤销/越界、列表排序与快速打开索引。完整 Xcode 下由 XCTest 运行；只有 Command Line Tools 时 `test/native.sh` 编译同一组场景运行，避免本机装不了 XCTest 就完全没测试。③**T10**：按单元格实际显示宽度（CJK 记 2）生成 `<colgroup>`，`table-layout: fixed`，长内容列最高 32 权重、短列最低 6，打印样式同步；表格序列化不变。④**F7c**：`refreshFootnotes()` 在渲染与画笔后比对引用，给无引用定义加 `.md-fn-orphan` 和「无引用」提示、隐藏返回箭头，不改 Markdown。⑤**F16**：新增 `release.sh`（签名/打包/可选公证）与 DMG 内 Applications 快捷方式；`Info.plist` 版本从 0.3.1 补到 0.11.0。⑥**顺带修路径 bug**：`libraryAllFiles` 统一 `/private` 前缀，快速打开不再算出错误相对路径。新增 8 项 JS 断言、7 组原生场景 |
+| v0.11.1 | 点左上角红色关闭按钮，最后一个窗口关掉后整个 app 直接退出；Typora 会留在后台，点 Dock 图标还能回来 | 根因是 `applicationShouldTerminateAfterLastWindowClosed` 直接返回 `true`，macOS 把「关最后一个窗口」当成退出。改为 `false`，并补全无窗口状态：①`applicationShouldHandleReopen` 点 Dock 时恢复最小化窗口或新建空白窗口；②`openFile` / `openFileInNewWindow` 在启动完成后不再只写 `pendingOpen`（原来没窗口时双击文件会静默丢失），当场建窗口加载；③无窗口时 `Cmd+O` 先建窗口再开面板。启动前的 `application(_:open:)` 仍走 pending 队列，不影响双击冷启动 |
 ---
 
 ## 五、已知限制（面向使用者）
