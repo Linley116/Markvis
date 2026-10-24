@@ -34,7 +34,7 @@
 
   var STORE_SORT = 'mf.library.sort';
 
-  var pane = null, listEl = null, titleEl = null, rootBarEl = null;
+  var pane = null, listEl = null, titleEl = null, rootBarEl = null, upBtn = null;
   var refreshTimer = null;
   var revealTimer = null;
 
@@ -45,6 +45,7 @@
     home: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1.8 1.8 7.2V14h12.4V7.2z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
     sort: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M3 4.2h10M3 8h7M3 11.8h4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
     clock: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 5.2V8l2.3 1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+    up: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 13V3.4" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.2 7.2 8 3.4l3.8 3.8" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
     refresh: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M13.2 8A5.2 5.2 0 1 1 11.6 4.4" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M11.4 1.6v3h-3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>'
   };
 
@@ -280,6 +281,13 @@
         name.textContent = baseName(state.root);
         name.setAttribute('title', state.root);
       }
+    }
+    if (upBtn) {
+      // 已经是磁盘根（或被清空）时不能继续往上
+      var up = parentDir(state.root);
+      var atTop = !state.root || !up || up === state.root;
+      upBtn.disabled = atTop;
+      upBtn.title = atTop ? '已经是顶层目录' : '上级目录：' + up;
     }
   }
 
@@ -701,6 +709,7 @@
       '<div class="mf-lib-rootbar">' +
         '<span class="mf-lib-root-name" title="">—</span>' +
         '<span class="mf-lib-acts">' +
+          '<button class="mf-lib-act" data-act="up" title="上级目录">' + ICON.up + '</button>' +
           '<button class="mf-lib-act" data-act="sort" title="排序">' + ICON.sort + '</button>' +
           '<button class="mf-lib-act" data-act="recents" title="最近文件夹">' + ICON.clock + '</button>' +
           '<button class="mf-lib-act" data-act="root" title="打开文件夹…">' + ICON.home + '</button>' +
@@ -711,6 +720,7 @@
     listEl = pane.querySelector('.mf-lib-list');
     titleEl = pane.querySelector('.mf-lib-title');
     rootBarEl = pane.querySelector('.mf-lib-rootbar');
+    upBtn = rootBarEl.querySelector('[data-act="up"]');
 
     pane.querySelector('.mf-lib-acts').addEventListener('click', function (e) {
       var act = e.target.closest ? e.target.closest('[data-act]') : null;
@@ -731,6 +741,7 @@
       else if (a === 'refresh') refresh();
       else if (a === 'sort') openSortMenu(x, y);
       else if (a === 'recents') openRecentsMenu(x, y);
+      else if (a === 'up') goUp();
     });
 
     // 行点击：目录展开/收起，文件打开
@@ -797,20 +808,40 @@
   }
 
   /**
-   * 根目录跟随当前文档（Typora 行为）：打开一个文件，它的父文件夹
-   * 就是树的根。用户手动「打开文件夹…」也会改根，之后打开别的目录的
-   * 文件时再跟过去 —— 和 Typora 一样，以最近一次动作为准。
+   * 根目录跟随当前文档。
+   *
+   * 规则（和用户预期的"选中哪个文件夹就在哪一层"一致）：
+   *   1. 文件已经在当前根之内 → **不动根**，只展开祖先并高亮。否则每打开
+   *      一个文件树就往里钻一层，用户选的文件夹位置一路被顶掉。
+   *   2. 文件在根之外（或还没有根）→ 跟到它的父文件夹，否则树里看不到它。
+   * 想回上一层用底部操作条的「上级目录」，或者最近文件夹。
    */
   function followDocument(path) {
     var p = path || window.__currentFilePath || '';
     if (!p) return;
     var dir = parentDir(p);
-    if (!dir || dir === state.root) { revealFile(p); return; }
+    if (!dir) { revealFile(p); return; }
+    // 根内（含根本身）就保持不动
+    if (state.root && (p === state.root || p.indexOf(state.root + '/') === 0)) {
+      revealFile(p);
+      return;
+    }
+    if (dir === state.root) { revealFile(p); return; }
     bridge.callHandler('library.setRoot', { path: dir }, function (res) {
       state.root = (res && res.root) || dir;
       state.cache = {};
       renderTitle();
       refresh(function () { revealFile(p); });
+    });
+  }
+
+  /** 返回上一级目录（根已经是 / 或空时不动） */
+  function goUp() {
+    var up = parentDir(state.root);
+    if (!state.root || !up || up === state.root) return;
+    bridge.callHandler('library.setRoot', { path: up }, function (res) {
+      if (res && res.error) return;
+      setRootFrom(res);
     });
   }
 

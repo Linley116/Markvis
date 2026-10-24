@@ -796,6 +796,10 @@ body:not(.mf-sidebar-open) #mf-outline-btn:hover {
 
 .mf-lib-act:hover { background: var(--code-bg); color: var(--fg); }
 
+/* 已经在顶层（/）时「上级目录」不可点 */
+.mf-lib-act:disabled { opacity: .3; cursor: default; }
+.mf-lib-act:disabled:hover { background: transparent; color: var(--muted); }
+
 .mf-lib-list {
   flex: 1;
   overflow-y: auto;

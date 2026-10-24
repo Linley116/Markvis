@@ -548,7 +548,7 @@ const TABLE_MD = [
     await wait(100);
     const deleteCall = calls.filter(c => c.name === 'library.delete').pop();
 
-    // Typora 行为：打开文档 → 根目录跟到它的父文件夹，并高亮当前文件
+    // 打开「根内」的文档：根保持不动（不往里钻一层），只展开祖先 + 高亮
     window.MFLibrary.followDocument('/root/notes/deep.md');
     await wait(150);
     const followed = {
@@ -560,12 +560,33 @@ const TABLE_MD = [
       rootTitle: document.querySelector('.mf-lib-root-name').textContent
     };
 
+    // 打开「根外」的文档：这时才跟到它的父文件夹
+    window.MFLibrary.followDocument('/other/x.md');
+    await wait(150);
+    const outside = {
+      setRootCall: calls.filter(c => c.name === 'library.setRoot').pop(),
+      rootTitle: document.querySelector('.mf-lib-root-name').textContent
+    };
+
+    // 「上级目录」按钮：/other → /
+    const upBtn = document.querySelector('.mf-lib-rootbar [data-act="up"]');
+    const upEnabledAtOther = upBtn && !upBtn.disabled;
+    upBtn.click();
+    await wait(150);
+    const up = {
+      setRootCall: calls.filter(c => c.name === 'library.setRoot').pop(),
+      rootTitle: document.querySelector('.mf-lib-root-name').textContent,
+      disabled: upBtn.disabled
+    };
+
     // 底部文件夹操作条（Typora 放在侧栏底部）
     const rootbar = {
       hasOpen: !!Array.from(document.querySelectorAll('.mf-lib-rootbar [data-act]'))
         .find(b => b.getAttribute('data-act') === 'root'),
       hasRefresh: !!Array.from(document.querySelectorAll('.mf-lib-rootbar [data-act]'))
-        .find(b => b.getAttribute('data-act') === 'refresh')
+        .find(b => b.getAttribute('data-act') === 'refresh'),
+      hasUp: !!upBtn,
+      upEnabledAtOther: upEnabledAtOther
     };
 
     window.MFSidebar.toggle();   // 收起整个侧栏
@@ -576,7 +597,7 @@ const TABLE_MD = [
       tabState, rows, afterExpand, afterHover, afterRefresh, openCall,
       rectLeft: Math.round(rect.left),
       margin, createCall, deleteCall,
-      followed, rootbar,
+      followed, outside, up, rootbar,
       closed: !document.body.classList.contains('mf-sidebar-open')
     };
   });
@@ -602,15 +623,24 @@ const TABLE_MD = [
         lib.createCall.data.name === 'hello.md' && lib.createCall.data.kind === 'file',
         JSON.stringify(lib.createCall));
   check('删除走 library.delete', lib.deleteCall && lib.deleteCall.data.path === '/root/b.txt', JSON.stringify(lib.deleteCall));
-  check('根目录跟随打开的文档（Typora 行为）',
-        lib.followed.setRootCall && lib.followed.setRootCall.data.path === '/root/notes',
-        JSON.stringify(lib.followed.setRootCall));
-  check('当前文件在树里高亮',
-        lib.followed.rows.length === 1 && lib.followed.rows[0].name === 'deep.md' &&
-        lib.followed.rows[0].current === true,
+  check('打开根内的文件不把根往里带',
+        !lib.followed.setRootCall, JSON.stringify(lib.followed.setRootCall));
+  check('根内文件仍展开祖先并高亮',
+        lib.followed.rows.some(r => r.name === 'deep.md' && r.current) &&
+        lib.followed.rows.some(r => r.name === 'notes'),
         JSON.stringify(lib.followed.rows));
-  check('底部条显示当前根目录', lib.followed.rootTitle === 'notes', lib.followed.rootTitle);
-  check('底部有「打开文件夹…」和「刷新」', lib.rootbar.hasOpen && lib.rootbar.hasRefresh, JSON.stringify(lib.rootbar));
+  check('底部条仍显示用户选的根目录', lib.followed.rootTitle === 'root', lib.followed.rootTitle);
+  check('打开根外的文件才跟随父文件夹',
+        lib.outside.setRootCall && lib.outside.setRootCall.data.path === '/other' &&
+        lib.outside.rootTitle === 'other',
+        JSON.stringify(lib.outside));
+  check('上级目录按钮回到上一层',
+        lib.up.setRootCall && lib.up.setRootCall.data.path === '/' && lib.up.rootTitle === '/',
+        JSON.stringify(lib.up));
+  check('到磁盘根后上级按钮禁用', lib.up.disabled === true, String(lib.up.disabled));
+  check('底部有「打开文件夹…」「刷新」「上级目录」',
+        lib.rootbar.hasOpen && lib.rootbar.hasRefresh && lib.rootbar.hasUp &&
+        lib.rootbar.upEnabledAtOther === true, JSON.stringify(lib.rootbar));
   check('可以收起', lib.closed === true);
 
   console.log('\n[13] 粘贴 HTML → Markdown（F10）');
