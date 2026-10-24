@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
 [![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-241%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -185,7 +185,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 
 ```bash
 node test/engine.test.js      # 121 项 —— 核心闭环
-node test/features.test.js    # 118 项 —— 功能
+node test/features.test.js    # 120 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容

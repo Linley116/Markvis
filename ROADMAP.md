@@ -1,7 +1,7 @@
 # Markvis 路线图
 
-> **基线 v0.12.0** · 12,361 行（engine 3,582 / html2md 311 / css 1,402 / features 2,123 / Swift 2,521 / tests 2,422）
-> **239 项 JS 断言全绿**（引擎 121 + 功能 118）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.8 MB / DMG 1.7 MB
+> **基线 v0.12.1** · 12,371 行（engine 3,582 / html2md 311 / css 1,410 / features 2,123 / Swift 2,521 / tests 2,424）
+> **241 项 JS 断言全绿**（引擎 121 + 功能 120）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.8 MB / DMG 1.7 MB
 > **CI 已跑通**：GitHub Actions run 40065959796（原生 XCTest / 构建 / JS / PDF 全部 success）
 > 仓库：<https://github.com/Linley116/Markvis>
 
@@ -86,6 +86,7 @@
 | v0.11.0 | 发布线没有 CI、原生层没有自动化测试、表格窄列折行、孤儿脚注无提示；另外快速打开返回的 `/private/var` 路径与文件树根不一致 | ①**CI**：GitHub Actions macOS runner 安装锁定的 `playwright-core` 与隔离 Chromium，依次跑原生测试、`build.sh --keep`、两套 JS 断言、PDF 回归；新增 `package-lock.json`，测试浏览器支持 `MARKVIS_TEST_CHROME`，不再硬编码本机 Chrome。②**T8**：抽出不依赖窗口的 `MFPath`（软链比较、`/private` 归一化、根目录越界、会话恢复过滤），文件树与 AppDelegate 改为复用它；新增 7 组原生场景覆盖路径、会话、JS 字面量、文件增删改移/撤销/越界、列表排序与快速打开索引。完整 Xcode 下由 XCTest 运行；只有 Command Line Tools 时 `test/native.sh` 编译同一组场景运行，避免本机装不了 XCTest 就完全没测试。③**T10**：按单元格实际显示宽度（CJK 记 2）生成 `<colgroup>`，`table-layout: fixed`，长内容列最高 32 权重、短列最低 6，打印样式同步；表格序列化不变。④**F7c**：`refreshFootnotes()` 在渲染与画笔后比对引用，给无引用定义加 `.md-fn-orphan` 和「无引用」提示、隐藏返回箭头，不改 Markdown。⑤**F16**：新增 `release.sh`（签名/打包/可选公证）与 DMG 内 Applications 快捷方式；`Info.plist` 版本从 0.3.1 补到 0.11.0。⑥**顺带修路径 bug**：`libraryAllFiles` 统一 `/private` 前缀，快速打开不再算出错误相对路径。新增 8 项 JS 断言、7 组原生场景 |
 | v0.11.1 | 点左上角红色关闭按钮，最后一个窗口关掉后整个 app 直接退出；Typora 会留在后台，点 Dock 图标还能回来 | 根因是 `applicationShouldTerminateAfterLastWindowClosed` 直接返回 `true`，macOS 把「关最后一个窗口」当成退出。改为 `false`，并补全无窗口状态：①`applicationShouldHandleReopen` 点 Dock 时恢复最小化窗口或新建空白窗口；②`openFile` / `openFileInNewWindow` 在启动完成后不再只写 `pendingOpen`（原来没窗口时双击文件会静默丢失），当场建窗口加载；③无窗口时 `Cmd+O` 先建窗口再开面板。启动前的 `application(_:open:)` 仍走 pending 队列，不影响双击冷启动 |
 | v0.12.0 | 产品从 MarkFrame 改名为 Markvis，远程仓库同步改名 | 全量替换品牌：`Markvis.app` / 可执行文件 / `local.markvis.editor` / Application Support 目录 / 日志前缀 / 窗口与标签标识 / 测试模块 `MarkvisTests` / 环境变量 `MARKVIS_*` / README、路线图、CI 与仓库链接。新增 `LegacyMigration`：新 Bundle ID 首次启动时用 `CFPreferencesCopyMultiple` 从 `local.markframe.editor` 补齐最近文件、会话、文件树根目录等偏好（不覆盖新值），并把 `Application Support/MarkFrame` 的主题与恢复文件按缺失补齐到 `Markvis`；旧目录保留，不做破坏性移动。内部 `mf.*` 偏好键与 `mf-` CSS 前缀保持不变，避免无意义的全局重命名风险 |
+| v0.12.1 | 鼠标移到左侧导航栏时整片变成手形指针，与普通桌面编辑器不一致 | 侧栏统一 `cursor: default`，包括 tab、大纲项、文件行和底部按钮；只有文本输入保留 I-beam、右边缘拖宽保留 `col-resize`。样式限定在 `#mf-sidebar` 内，不影响正文链接、按钮和预览区。新增 2 项断言（侧栏与 tab/大纲均为 default、拖拽条仍为 col-resize） |
 ---
 
 ## 五、已知限制（面向使用者）

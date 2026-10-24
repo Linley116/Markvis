@@ -135,6 +135,19 @@ const TABLE_MD = [
   check('层级正确', JSON.stringify(outline.levels) === '["1","2","3"]', JSON.stringify(outline.levels));
   check('标题文本正确', outline.texts[0] === '表格', outline.texts.join('|'));
 
+  const cursors = await page.evaluate(() => {
+    const sidebar = document.getElementById('mf-sidebar');
+    return {
+      sidebar: getComputedStyle(sidebar).cursor,
+      tab: getComputedStyle(document.querySelector('.mf-side-tab')).cursor,
+      item: getComputedStyle(document.querySelector('.mf-outline-item')).cursor,
+      resizer: getComputedStyle(document.querySelector('.mf-sidebar-resizer')).cursor
+    };
+  });
+  check('侧栏内是普通箭头', cursors.sidebar === 'default' && cursors.tab === 'default' && cursors.item === 'default',
+        JSON.stringify(cursors));
+  check('拖宽手柄保留 col-resize', cursors.resizer === 'col-resize', cursors.resizer);
+
   const jumped = await page.evaluate(async () => {
     const before = document.getElementById('scroll').scrollTop;
     document.querySelectorAll('.mf-outline-item')[2].click();

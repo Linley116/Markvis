@@ -599,6 +599,14 @@ a:hover { text-decoration: underline; }
 
 body.mf-sidebar-open #mf-sidebar { transform: none; }
 
+/* 侧栏统一用普通箭头，不跟随可点击元素变成手形；
+   文字输入保留 I-beam，右边缘拖宽保留 col-resize。 */
+#mf-sidebar,
+#mf-sidebar * { cursor: default; }
+#mf-sidebar input,
+#mf-sidebar textarea { cursor: text; }
+#mf-sidebar .mf-sidebar-resizer { cursor: col-resize; }
+
 body.mf-sidebar-open #scroll {
   margin-left: var(--mf-sidebar-w, 240px);
 }

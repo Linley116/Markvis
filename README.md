@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
 [![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-241%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -184,7 +184,7 @@ MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alon
 
 ```bash
 node test/engine.test.js      # 121 assertions — core loop
-node test/features.test.js    # 118 assertions — features
+node test/features.test.js    # 120 assertions — features
 ./test/native.sh                                       # native Swift tests
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
