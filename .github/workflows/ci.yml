@@ -53,4 +53,12 @@ jobs:
         run: npm run test:features
 
       - name: Run PDF regression
-        run: npm run test:pdf
+        run: |
+          set +e
+          npm run test:pdf > pdf.log 2>&1
+          status=$?
+          cat pdf.log
+          if [ $status -ne 0 ]; then
+            tail -n 60 pdf.log | sed 's/^/::error::/'
+          fi
+          exit $status
