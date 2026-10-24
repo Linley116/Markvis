@@ -10,7 +10,15 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$HOME/Applications/MarkFrame.app/Contents/MacOS/MarkFrame"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+APP_PID=0
+cleanup() {
+  if [[ "$APP_PID" -gt 0 ]]; then
+    kill "$APP_PID" 2>/dev/null || true
+    wait "$APP_PID" 2>/dev/null || true
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 
 if [[ ! -x "$APP" ]]; then
   echo "未安装：$APP（先跑 ./build.sh）"
@@ -40,15 +48,29 @@ parts += ['## 结尾', '', 'END-OF-DOCUMENT-MARKER 这一段必须完整出现�
 open(sys.argv[1], 'w').write('\n'.join(parts))
 PY
 
-pkill -f "MarkFrame.app/Contents/MacOS/MarkFrame" 2>/dev/null || true
-sleep 1
-
 echo "==> 导出中…"
 MARKFRAME_EXPORT_PDF="$TMP/out.pdf" "$APP" "$TMP/doc.md" >/dev/null 2>&1 &
-sleep 14
+APP_PID=$!
 
-if [[ ! -f "$TMP/out.pdf" ]]; then
-  echo "FAIL: 没有生成 PDF"
+# 不按固定秒数猜：等文件出现且大小连续两秒不变，慢的 CI 也能跑完
+last_size=-1
+stable=0
+for _ in {1..90}; do
+  if [[ -s "$TMP/out.pdf" ]]; then
+    size=$(stat -f%z "$TMP/out.pdf" 2>/dev/null || echo 0)
+    if [[ "$size" -gt 0 && "$size" -eq "$last_size" ]]; then
+      stable=$((stable + 1))
+    else
+      stable=0
+    fi
+    [[ "$stable" -ge 2 ]] && break
+    last_size=$size
+  fi
+  sleep 1
+done
+
+if [[ ! -s "$TMP/out.pdf" ]]; then
+  echo "FAIL: 90 秒内没有生成 PDF"
   exit 1
 fi
 
