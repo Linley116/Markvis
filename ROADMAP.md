@@ -1,7 +1,8 @@
 # MarkFrame 路线图
 
-> **基线 v0.11.0** · 12,222 行（engine 3,582 / html2md 311 / css 1,402 / features 2,123 / Swift 2,382 / tests 2,422）
-> **239 项 JS 断言全绿**（引擎 121 + 功能 118）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.7 MB / DMG 1.7 MB
+> **基线 v0.11.0** · 12,250 行（engine 3,582 / html2md 311 / css 1,402 / features 2,123 / Swift 2,410 / tests 2,422）
+> **239 项 JS 断言全绿**（引擎 121 + 功能 118）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.8 MB / DMG 1.7 MB
+> **CI 已跑通**：GitHub Actions run 40065959796（原生 XCTest / 构建 / JS / PDF 全部 success）
 > 仓库：<https://github.com/Linley116/markframe>
 
 图例：✅ 已完成 · 🚧 进行中 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -138,11 +139,14 @@ KaTeX 的 CSS 用相对 `url(fonts/…)`：PDF 导出要把 `fonts/` 拷进打�
 菜单里显示的是整句说明而不是主题名。现在只接受 `/* @name: x */` 这种独占一行的注释，
 或裸写的 `@name: x`；JS 与 Swift 两端用同一套规则，否则菜单名和按钮名会对不上。
 
+**12. CI 上不要用固定延迟等异步结果**
+PDF 回归原来 `sleep 14`，本机够用，CI 上文件还没写完就判失败。改成等文件出现且大小连续两秒不变（最多 90 秒）。更隐蔽的是应用内的自动导出钩子：固定 1.8 秒后才开始，CI 上 Web 层还没加载完，分页只得到 1 页且内容被截断。现在轮询 `document.readyState`、`__prepareExport`、`__paginateForPrint` 都就绪再导出。经验：测试里的 `sleep` 只能在“最多等多久”上使用，不能当作“已经完成”的判据。
+
 ---
 
 ## 七、发布前检查
 
 1. `./build.sh` 能过，`test/engine.test.js` + `test/features.test.js` + `test/native.sh` + `test/pdf-regression.sh` 全绿。
-2. GitHub Actions 跑通（`.github/workflows/ci.yml`，macOS runner 上构建 + 三套测试 + PDF 回归）。**本地已配置，首次远端运行待推送后确认。**
+2. ✅ GitHub Actions 跑通（`.github/workflows/ci.yml`，macOS 15 runner 上构建 + 三套测试 + PDF 回归）：2026-10-24 run `40065959796` 全部 success。
 3. `F16`：`./release.sh` 已能产出 DMG；公证仍需 Developer ID 证书和 Apple 账号。
 4. 仓库描述与 Topics 填上（SSH 推不了仓库设置，得走网页或 API）。**仍待手动完成。**

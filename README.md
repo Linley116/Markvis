@@ -6,6 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
+[![CI](https://github.com/Linley116/markframe/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/markframe/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -29,11 +30,11 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 
 | | Electron apps | MarkFrame |
 |---|---|---|
-| Binary size | ~150 MB | **~3.7 MB** (about 2.5 MB of it is Mermaid); DMG is ~1.7 MB |
+| Binary size | ~150 MB | **~3.8 MB** (about 2.5 MB of it is Mermaid); DMG is ~1.7 MB |
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The project is currently about 12,222 lines: 2,382 Swift, 5,295 web core, 2,123 features, and 2,422 tests.
+The project is currently about 12,250 lines: 2,410 Swift, 5,295 web core, 2,123 features, and 2,422 tests.
 
 ### Features
 

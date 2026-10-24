@@ -31,13 +31,17 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 echo "==> ad-hoc signing"
 codesign --force --deep --sign - "$APP" 2>/dev/null || echo "   (codesign skipped)"
 
-echo "==> installing to $DEST"
-pkill -f "MarkFrame.app/Contents/MacOS/MarkFrame" 2>/dev/null || true
-sleep 0.4
-mkdir -p "$HOME/Applications"
-rm -rf "$DEST"
-cp -R "$APP" "$DEST"
-xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
+if [[ "${MARKFRAME_NO_INSTALL:-0}" == "1" ]]; then
+  echo "==> skipping install (MARKFRAME_NO_INSTALL=1)"
+else
+  echo "==> installing to $DEST"
+  pkill -f "MarkFrame.app/Contents/MacOS/MarkFrame" 2>/dev/null || true
+  sleep 0.4
+  mkdir -p "$HOME/Applications"
+  rm -rf "$DEST"
+  cp -R "$APP" "$DEST"
+  xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
+fi
 
 if [[ $KEEP -eq 0 ]]; then
   echo "==> removing build artifacts (single visible copy only)"

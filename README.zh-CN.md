@@ -6,6 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
+[![CI](https://github.com/Linley116/markframe/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/markframe/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -30,11 +31,11 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 
 | | Electron 应用 | MarkFrame |
 |---|---|---|
-| 包体 | 约 150 MB | **约 3.7 MB**（其中约 2.5 MB 是 Mermaid），DMG 约 1.7 MB |
+| 包体 | 约 150 MB | **约 3.8 MB**（其中约 2.5 MB 是 Mermaid），DMG 约 1.7 MB |
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 12,222 行：Swift 2,382 行、Web 内核 5,295 行、功能模块 2,123 行、测试 2,422 行。
+当前约 12,250 行：Swift 2,410 行、Web 内核 5,295 行、功能模块 2,123 行、测试 2,422 行。
 
 ### 功能
 

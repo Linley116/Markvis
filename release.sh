@@ -19,7 +19,7 @@ IDENTITY="${MARKFRAME_SIGN_IDENTITY:-}"
 if [[ "$IDENTITY" == "-" ]]; then IDENTITY=""; fi
 
 echo "==> build $VERSION"
-"$ROOT/build.sh" --keep >/dev/null
+MARKFRAME_NO_INSTALL=1 "$ROOT/build.sh" --keep >/dev/null
 
 if [[ -n "$IDENTITY" ]]; then
   echo "==> sign with $IDENTITY"
@@ -31,11 +31,10 @@ fi
 
 echo "==> stage DMG"
 STAGE="$ROOT/build/dmg-stage"
-rm -rf "$STAGE"
 mkdir -p "$STAGE" "$DIST"
-cp -R "$APP" "$STAGE/MarkFrame.app"
-ln -s /Applications "$STAGE/Applications"
-rm -f "$DMG"
+# ditto 覆盖而不是先 rm -rf：构建目录也遵守本机的批量删除保护
+ditto "$APP" "$STAGE/MarkFrame.app"
+ln -sfn /Applications "$STAGE/Applications"
 hdiutil create -quiet -volname "MarkFrame $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 hdiutil verify -quiet "$DMG"
 
