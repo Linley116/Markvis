@@ -1012,6 +1012,39 @@ final class EditorWindowController: NSWindowController {
         NSWorkspace.shared.open(Self.themesDir)
     }
 
+    /// PDF 回归用：等待 Web 层真正就绪再导出。固定延迟在慢速 CI 上
+    /// 会在文档还没加载完时就开始分页，结果只导出 1 页。
+    private func startAutomatedExport(to path: String, attempt: Int = 0) {
+        guard attempt < 60 else {
+            mfLog("automated export: web layer not ready after 30s")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            if self.webView.isLoading || self.webView.url == nil {
+                self.startAutomatedExport(to: path, attempt: attempt + 1)
+                return
+            }
+            let readyJS = "document.readyState === 'complete' && " +
+                "typeof window.__prepareExport === 'function' && " +
+                "typeof window.__paginateForPrint === 'function' && " +
+                "!!(window.MF && window.MF.getMarkdown)"
+            self.runJSReturning(readyJS) { [weak self] result in
+                guard let self else { return }
+                let ready = (result as? Bool) == true || (result as? NSNumber)?.boolValue == true
+                guard ready else {
+                    self.startAutomatedExport(to: path, attempt: attempt + 1)
+                    return
+                }
+                mfLog("automated export: web ready, exporting \(path)")
+                self.runJS("window.__prepareExport && window.__prepareExport()")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.writePDF(to: URL(fileURLWithPath: path))
+                }
+            }
+        }
+    }
+
     /// 只认单行指令：`/* @name: 纸墨 */` 或裸写 `@name: 纸墨`。
     /// 多行注释里的说明文字（示例文件开头那些）不会被当成指令。
     private func themeDisplayName(at url: URL) -> String? {
@@ -1087,12 +1120,7 @@ final class EditorWindowController: NSWindowController {
         // 自动化验证入口：设置 MARKFRAME_EXPORT_PDF=/tmp/x.pdf 时，
         // 启动后自动导出一次 PDF（跳过保存面板）
         if let pdfPath = ProcessInfo.processInfo.environment["MARKFRAME_EXPORT_PDF"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
-                self?.runJS("window.__prepareExport && window.__prepareExport()")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self?.writePDF(to: URL(fileURLWithPath: pdfPath))
-                }
-            }
+            startAutomatedExport(to: pdfPath)
         }
 
         // 自动化验证入口：设置 MARKFRAME_TEST_RECOVERY=<文本> 时模拟一次自动保存，
