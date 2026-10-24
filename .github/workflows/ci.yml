@@ -18,9 +18,9 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -32,7 +32,15 @@ jobs:
         run: npx playwright-core install chromium
 
       - name: Run native XCTest suite
-        run: ./test/native.sh
+        run: |
+          set +e
+          ./test/native.sh > native.log 2>&1
+          status=$?
+          cat native.log
+          if [ $status -ne 0 ]; then
+            tail -n 60 native.log | sed 's/^/::error::/'
+          fi
+          exit $status
 
       - name: Build application
         run: ./build.sh --keep
