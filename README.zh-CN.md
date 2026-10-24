@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-103%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -22,7 +22,7 @@ MarkFrame 是一个 macOS 上的所见即所得 Markdown 编辑器：在实时�
 
 它起初是个实验：我先用 REA（Reverse Engineer Anything）逆向了 Typora 的架构，再照着同样的设计从零实现了一遍，看看这些设计是否真的立得住。结论是立得住，关键实现都写在代码和注释里。
 
-它**不是** Typora 的替代品，也没打算做成替代品。它是一份能跑、能读的同构实现：约 5,600 行 Swift + JavaScript，运行时零第三方依赖。
+它**不是** Typora 的替代品，也没打算做成替代品。它是一份能跑、能读的同构实现，运行时零第三方依赖。
 
 ### 为什么它不是 Electron
 
@@ -30,11 +30,11 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 
 | | Electron 应用 | MarkFrame |
 |---|---|---|
-| 包体 | 约 150 MB | **约 3.6 MB**（其中 2.5 MB 是 Mermaid） |
+| 包体 | 约 150 MB | **约 3.7 MB**（其中约 2.5 MB 是 Mermaid），DMG 约 1.7 MB |
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-整个编辑器约 6,940 行：Swift 1,440 行、Web 内核 3,760 行、功能模块 600 行、测试 1,130 行。
+当前约 12,222 行：Swift 2,382 行、Web 内核 5,295 行、功能模块 2,123 行、测试 2,422 行。
 
 ### 功能
 
@@ -46,11 +46,12 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，MarkFrame 也是�
 | **200ms 画笔** | 只重绘脏块；块内 HTML 相同就完全不碰 DOM |
 | **`expand`** | 光标移进 `**粗体**`，标记浮出来 —— 而且可编辑：能删掉一个 `*`、能用方向键穿过去、能在中间插字 |
 | **源码模式** | `Cmd+/` 在渲染视图和原文之间双向切换 |
-| **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；打开新文件不会顶掉当前文档 |
-| **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、按 CJK 宽度算列宽 |
+| **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；重启恢复上次会话，重复打开同一文件只聚焦已有窗口 |
+| **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、CJK 内容友好的列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
-| **大纲** | `Cmd+Shift+O` 或窗口左上角的常驻按钮 —— 收起后按钮停在原位，再点一下即展开；拖右边缘可调宽（双击复位、宽度记忆） |
-| **文件树** | `Cmd+Shift+E` 或右上角按钮；目录懒加载、行内新建/重命名、删除进废纸篓、右键菜单、拖拽调宽 |
+| **大纲 / 文件侧栏** | `Cmd+Shift+O` 开关左侧统一侧栏，`Cmd+Shift+E` 直达文件 tab；宽度记忆 |
+| **文件树** | 目录懒加载、当前文件高亮、外部改动自动刷新、新建/重命名/复制/删除、排序、树内拖拽、最近文件夹和上级目录 |
+| **快速打开** | `Cmd+Shift+P` 模糊搜索当前文件夹内的文档，键盘选择并打开 |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，以及自己放进主题文件夹的 CSS；状态栏主题菜单切换，`Cmd+Shift+L` 循环 |
 | **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，点一下弹出源码浮层直接改 |
@@ -136,7 +137,7 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 
 ### 构建
 
-要求：macOS 13+、Swift 6 工具链（`xcode-select --install`）。不需要 npm、不需要 Xcode 工程、没有第三方依赖。
+要求：macOS 13+、Swift 6 工具链（`xcode-select --install`）。构建本身不需要 npm、不需要 Xcode 工程、运行时没有第三方依赖；只有跑 JS 测试才用得到 `playwright-core`。
 
 ```bash
 git clone https://github.com/Linley116/markframe.git
@@ -152,6 +153,22 @@ cd markframe
 ./build.sh --keep   # 保留 build/MarkFrame.app
 ```
 
+要生成可分发的 DMG：
+
+```bash
+./release.sh        # dist/MarkFrame-<版本>.dmg（ad-hoc 签名，未公证）
+```
+
+拿 Developer ID 证书后可以签名并公证，其他 Mac 才能直接打开：
+
+```bash
+MARKFRAME_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+APPLE_ID="you@example.com" APPLE_TEAM_ID="TEAMID" APPLE_APP_PASSWORD="app-specific-password" \
+./release.sh
+```
+
+也可以先用 `xcrun notarytool store-credentials` 存好钥匙串配置，再设 `MARKFRAME_NOTARY_PROFILE`。没有公证凭据时脚本会明确提示产物仍未公证，不会把“已打包”说成“已公证”。
+
 > `web/vendor/highlight.min.js`（highlight.js 11.9.0，BSD-3-Clause）是刻意内置的，保证没网也能构建。
 
 ### 快捷键
@@ -165,8 +182,9 @@ cd markframe
 | 粗体 / 斜体 / 行内代码 | `Cmd+B` / `Cmd+I` / `Cmd+K` |
 | 切换源码模式 | `Cmd+/` |
 | 查找替换 | `Cmd+F` |
-| 大纲 | `Shift+Cmd+O` |
-| 文件树 | `Shift+Cmd+E` |
+| 显示 / 隐藏侧栏 | `Shift+Cmd+O` |
+| 显示文件树 | `Shift+Cmd+E` |
+| 快速打开 | `Shift+Cmd+P` |
 | 专注模式 / 打字机 | `Shift+Cmd+F` / `Shift+Cmd+T` |
 | 下一个主题 | `Shift+Cmd+L` |
 | 放大 / 缩小 / 实际大小 | `Cmd++` / `Cmd+-` / `Cmd+0` |
@@ -174,13 +192,14 @@ cd markframe
 ### 测试
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 111 项 —— 核心闭环
-NODE_PATH=./node_modules node test/features.test.js    # 77 项 —— 功能
+node test/engine.test.js      # 121 项 —— 核心闭环
+node test/features.test.js    # 118 项 —— 功能
+./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
 ```
 
-JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开发依赖，`NODE_PATH` 指向任意一份安装即可）。PDF 回归会导出一份包含 60 行表格、80 行代码块和结尾标记的文档，然后检查：多页、无空白页、A4 尺寸一致、填充率、结尾标记是否还在。
+JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开发依赖，`npm ci` 后执行 `playwright-core install chromium` 即可；也可用 `MARKFRAME_TEST_CHROME` 指定浏览器）。原生套件覆盖路径安全、会话恢复、文件操作与撤销、文件树排序和快速打开索引；完整 Xcode 下走 XCTest，只有 Command Line Tools 时自动使用同一组场景的轻量运行器。PDF 回归会导出一份包含 60 行表格、80 行代码块和结尾标记的文档，然后检查：多页、无空白页、A4 尺寸一致、填充率、结尾标记是否还在。
 
 ### 已知限制
 
@@ -190,11 +209,12 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
 - 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
 - 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
-- app 是 ad-hoc 签名，未公证前不要分发构建产物。
+- 默认构建是 ad-hoc 签名，未公证前不要分发构建产物；`release.sh` 支持 Developer ID 签名与公证，但需要开发者账号。
+- 当前 DMG 只包含构建机器架构（Apple Silicon 上是 arm64），Intel Mac 需要单独构建。
 
 ### 路线图
 
-见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着待修 bug 列表、待做功能列表和踩坑记录。简版：统一撤销栈、嵌套块、文件树、增量落盘。
+见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着待修 bug 列表、待做功能列表和踩坑记录。当前主线是 CI、原生 XCTest、DMG 与公证；增量落盘经评估后暂缓。
 
 ### 许可证
 

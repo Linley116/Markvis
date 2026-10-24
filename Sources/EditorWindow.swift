@@ -553,11 +553,7 @@ final class EditorWindowController: NSWindowController {
 
     /// 路径必须落在根目录内，否则拒绝（防 ../ 穿越）
     private func safeEntryURL(_ raw: String, root: String) -> URL? {
-        guard !raw.isEmpty else { return nil }
-        let url = URL(fileURLWithPath: raw).standardizedFileURL
-        let rootURL = URL(fileURLWithPath: root).standardizedFileURL
-        guard url.path.hasPrefix(rootURL.path + "/") else { return nil }
-        return url
+        MFPath.entry(raw, root: root)
     }
 
     /// Typora 的文件树只显示它支持的类型（Markdown / 文本），目录永远显示
@@ -909,7 +905,7 @@ final class EditorWindowController: NSWindowController {
     /// FSEvents 报的是真实路径（macOS 上 /tmp 是 /private/tmp 的软链），
     /// 两侧统一去掉 /private 前缀才对得上。
     private func realPath(_ p: String) -> String {
-        p.hasPrefix("/private") ? String(p.dropFirst("/private".count)) : p
+        MFPath.real(p)
     }
 
     private func markSelfWrite(_ paths: String...) {
@@ -970,6 +966,8 @@ final class EditorWindowController: NSWindowController {
         guard !root.isEmpty else { return [] }
         let fm = FileManager.default
         let rootURL = URL(fileURLWithPath: root)
+        // enumerator 可能给出 /private/var，而文件树根是 /var；统一后再算相对路径
+        let rootPath = MFPath.real(rootURL.path)
         guard let e = fm.enumerator(
             at: rootURL,
             includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
@@ -986,11 +984,12 @@ final class EditorWindowController: NSWindowController {
             let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
             if values?.isDirectory ?? false { continue }
             guard Self.librarySupportedExts.contains(url.pathExtension.lowercased()) else { continue }
-            let rel = url.path.hasPrefix(rootURL.path + "/")
-                ? String(url.path.dropFirst(rootURL.path.count + 1)) : url.lastPathComponent
+            let path = MFPath.real(url.path)
+            let rel = path.hasPrefix(rootPath + "/")
+                ? String(path.dropFirst(rootPath.count + 1)) : name
             out.append([
                 "name": name,
-                "path": url.path,
+                "path": path,
                 "rel": rel,
                 "mtime": values?.contentModificationDate?.timeIntervalSince1970 ?? 0
             ])

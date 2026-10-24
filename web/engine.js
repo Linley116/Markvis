@@ -334,6 +334,67 @@
     return cells;
   }
 
+  /** 表格列宽用的纯文本：不计 Markdown 标记，只算用户实际看到的字。 */
+  function inlineDisplayText(nodes) {
+    return (nodes || []).map(function (n) {
+      switch (n.type) {
+        case 'plain': return n.text || '';
+        case 'code': return n.text || '';
+        case 'break': return ' ';
+        case 'image': return n.alt || '';
+        case 'fnref': return '[' + (n.label || '') + ']';
+        case 'math': return n.tex || '';
+        case 'autolink': return n.href || '';
+        case 'strong':
+        case 'em':
+        case 'del':
+        case 'link':
+        case 'link_ref':
+          return inlineDisplayText(n.children);
+        default:
+          return '';
+      }
+    }).join('');
+  }
+
+  /** CJK 宽字符按 2 计，避免中文列被 ASCII 长度低估后折行。 */
+  function displayWidth(text) {
+    var width = 0;
+    var chars = Array.from(String(text || ''));
+    for (var i = 0; i < chars.length; i++) {
+      var cp = chars[i].codePointAt(0);
+      if (cp > 0xffff || /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/.test(chars[i])) {
+        width += 2;
+      } else {
+        width += 1;
+      }
+    }
+    return width;
+  }
+
+  /** 按每列最长内容分配百分比；窄列给足 6，超长文本封顶 32 避免一列吃满。 */
+  function tableColumnWeights(rows) {
+    var cols = 0;
+    for (var i = 0; i < rows.length; i++) cols = Math.max(cols, rows[i].length);
+    var weights = [];
+    for (var c = 0; c < cols; c++) {
+      var max = 0;
+      for (var r = 0; r < rows.length; r++) {
+        max = Math.max(max, displayWidth(inlineDisplayText(rows[r][c])));
+      }
+      weights.push(Math.max(6, Math.min(32, max)));
+    }
+    return weights;
+  }
+
+  function tableColgroupHTML(rows) {
+    var weights = tableColumnWeights(rows);
+    var total = weights.reduce(function (a, b) { return a + b; }, 0) || 1;
+    return '<colgroup>' + weights.map(function (w) {
+      return '<col style="width:' + (w * 100 / total).toFixed(2) + '%">';
+    }).join('') + '</colgroup>';
+  }
+
   function parseTableAlign(sep) {
     return splitTableRow(sep).map(function (c) {
       var left = c.charAt(0) === ':';
@@ -851,7 +912,8 @@
         }).join('') + '</tbody>';
 
         return '<table class="md-block md-table" mdtype="table" data-align="' +
-          escapeAttr(JSON.stringify(aligns)) + '"' + cid + '>' + thead + tbody + '</table>';
+          escapeAttr(JSON.stringify(aligns)) + '"' + cid + '>' + tableColgroupHTML(b.rows) +
+          thead + tbody + '</table>';
 
       case 'list': {
         var tag = b.ordered ? 'ol' : 'ul';
@@ -942,6 +1004,27 @@
       if (metas[i].parentNode) metas[i].parentNode.removeChild(metas[i]);
     }
     return clone.textContent;
+  }
+
+  /** 标记没有被正文引用的脚注定义（F7c）：只加展示类，不改 Markdown。 */
+  function refreshFootnotes() {
+    var refs = write.querySelectorAll('.md-fn-ref');
+    var used = {};
+    for (var i = 0; i < refs.length; i++) {
+      used[refs[i].getAttribute('data-label')] = true;
+    }
+    var defs = write.querySelectorAll('[mdtype="def_footnote"]');
+    for (var k = 0; k < defs.length; k++) {
+      var label = defs[k].getAttribute('data-label') || '';
+      var orphan = !used[label];
+      defs[k].classList.toggle('md-fn-orphan', orphan);
+      defs[k].setAttribute('title', orphan ? '没有正文引用指向这条脚注' : '');
+      var back = defs[k].querySelector('.md-fn-back');
+      if (back) {
+        back.setAttribute('title', orphan ? '没有引用可返回' : '回到引用');
+        back.setAttribute('aria-disabled', orphan ? 'true' : 'false');
+      }
+    }
   }
 
   /** 按当前标题重建所有 [TOC] 块（内容不可编辑，纯展示 + 点击跳转） */
@@ -1150,6 +1233,7 @@
   function renderDoc() {
     write.innerHTML = doc.map(renderBlock).join('');
     padEmpties();
+    refreshFootnotes();
     refreshTOC();
     hydrateMath();
     hydrateMermaid();
@@ -1833,6 +1917,7 @@
     });
     updateExpand();
     updateWordCount();
+    refreshFootnotes();
     refreshTOC();
     hydrateMath();
     hydrateMermaid();
@@ -3381,7 +3466,7 @@
       'pre.md-fences, pre.md-fences code { white-space: pre-wrap !important;',
       '  overflow-wrap: anywhere; word-break: break-word; }',
       'pre.md-fences { overflow-x: hidden !important; }',
-      'table { table-layout: auto; }',
+      'table { table-layout: fixed; }',
       '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }'
     ].join('\n');
 

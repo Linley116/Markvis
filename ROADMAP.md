@@ -1,7 +1,7 @@
 # MarkFrame 路线图
 
-> **基线 v0.10.11** · 11,817 行（engine 3,497 / html2md 311 / css 1,391 / features 2,123 / Swift 2,353 / tests 2,142）
-> **231 项断言全绿**（引擎 113 + 功能 118）+ 原生文件操作自检 + PDF 内容回归 · 包体 3.8 MB
+> **基线 v0.11.0** · 12,222 行（engine 3,582 / html2md 311 / css 1,402 / features 2,123 / Swift 2,382 / tests 2,422）
+> **239 项 JS 断言全绿**（引擎 121 + 功能 118）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.7 MB / DMG 1.7 MB
 > 仓库：<https://github.com/Linley116/markframe>
 
 图例：✅ 已完成 · 🚧 进行中 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -19,22 +19,17 @@
 | ✅ | **5** | 补齐体验差距 | `T1` 行内标记可编辑 · `F7` 脚注/TOC · `F7b` 定义式链接 · `F12` 拼写检查 · `T9` 菜单本地化 · `T11` 崩溃恢复 | 已完成 |
 | ✅ | **6** | 公式与图表 | `F5` KaTeX 数学 · `F6` Mermaid · `F5b` 源码浮层 · PDF 弱引用修复 | 已完成 |
 | ✅ | **7** | 主题与个性化 | `F17` 自定义主题包（`themes/*.css`）· 状态栏主题菜单 · 打开文件夹 / 重新加载 · `--mf-editor-width` 交给主题 | 已完成（`F14` 补全顺延到第 8 轮随手项） |
-| 🚧 | **8** | 结构与基础设施 | `T3` 撤销栈 · `T4` 嵌套块 · `F9` 文件树 · `F15` 增量落盘 | `T3` / `T4` / `F9` 已完成，`F15` 未开始 |
-| ⬜ | **9** | 发布线 | CI（build + 两套测试）· `T8` 原生 XCTest · `F16` dmg + 公证 · `F11` 快速打开 | 未开始 |
+| 🚧 | **8** | 结构与基础设施 | `T3` 撤销栈 · `T4` 嵌套块 · `F9` 文件树 · `F15` 增量落盘 | `T3` / `T4` / `F9` 已完成，`F15` 评估后暂缓 |
+| 🚧 | **9** | 发布线 | CI（build + 三套测试）· `T8` 原生测试 · `F16` dmg + 公证 · `F11` 快速打开 | `F11` / CI / `T8` 已完成；`F16` 打包完成，公证待 Developer ID 账号 |
 
 > 排期变更：第 3 轮原计划是 `F5`/`F6`/`T1`，实际先做了 PDF 重做与开源，这三项分别落到第 5、6 轮。
 
 ---
 
-## 二、待修 Bug 与技术债（2 项 + 1 个小问题）
+## 二、待修 Bug 与技术债（0 项）
 
-| 编号 | 问题 | 影响 | 规模 |
-|---|---|---|---|
-| **T8** | 原生层零自动化测试 | Swift 已 1,410 行，只有 `MARKFRAME_SELFTEST` 启动自检 + PDF 回归，没有真正的 XCTest 覆盖 | M |
-| **T10** | 表格列宽交给浏览器 | `table-layout: auto` 下窄列会折成多行，长表格页观感比 Typora 差一截 | M |
-| **F7c** | 孤儿脚注不标记 | 删掉引用后，`[^id]: …` 定义还留在文末，不提示也不清理 | S |
+当前没有未修的编号 bug。`T8` 原生测试、`T10` 表格列宽、`F7c` 孤儿脚注已在 v0.11.0 完成，详见第四节。
 
-> T4 会动基础数据结构，改之前先跑一遍两套测试建立基线。
 > T3 已按「整篇快照」落地（v0.10.0）：实时模式存 `{markdown, 光标}`，源码模式存 `{textarea, 选区}`，
 > 上限 200 步 / 3MB，同模式 800ms 内的连续输入合并成一步；撤销到另一条模式的快照时会先切过去再写内容。
 
@@ -51,7 +46,7 @@
 | **F13** | HTML 块 | 内联编辑 + `iframe` 沙箱（Typora 用 `srcdoc` + 独立 partition） | P2 | M |
 | **F14** | emoji / 语言名补全 | 输入 `:` 补 emoji；围栏语言名补全 | 随时 | S |
 | **F15** | 增量落盘 | 复刻 `document.syncChangeIfNeeded` 的命令流协议，取代全量保存。**v0.10.8 评估后暂缓**：JS 要 diff 就得先序列化全篇（省不掉），原生仍是整文件写；bench 实测 2500 块序列化只在毫秒级，收益不抵写坏文件的风险 | P2 | M |
-| **F16** | 发布分发 | dmg + 公证。现在 ad-hoc 签名，别人机器上会被 Gatekeeper 拦 | 发布线 | M |
+| **F16** | 发布分发 | **v0.11.0 已完成 `release.sh`**：Developer ID 签名、DMG、`notarytool` 提交与装订；无凭据时明确标注未公证。剩余：需要用户的 Apple Developer ID 账号实际跑一次公证 | 发布线 | ~~M~~ |
 | **F18** | 打印 | `NSPrintOperation` + 与 PDF 共用同一份 print stylesheet | 随时 | S |
 
 ---
@@ -88,13 +83,15 @@
 | v0.10.9 | 打开文件夹后，鼠标移到某个文件夹上，已展开的层级会自己收起来（箭头还开着，里面却是空的） | 根因是刷新只重拉根目录：`refresh()` 把整棵缓存清空后只 `loadDir(root)`，已展开的子目录拿不到内容，`treeHTML` 就不渲染子项；而 `state.expanded` 还留着 `true`，于是箭头朝下、内容为空，再点一下反而变成「收起」。三处修：①`refresh()` 改成「根 + 所有已展开且已加载的目录」一起重拉（`loadDir(path, cb, force)`），期间继续用旧缓存渲染、全部回来再一次性重绘，不闪不塌；②新增 `isOpen(path)` = 展开 **且** 有缓存，箭头、递归、点击三处统一用它，渲染状态和真实状态不再错位；③重绘保留 `scrollTop`，并把对当前文件的强制 `scrollIntoView` 从 `render()` 挪到 `revealFile()`，刷新不会把用户正在看的位置拽走。原生侧：判断「这批事件是不是自己写盘」时先排除目录条目——替换文件会连带改父目录 mtime，而目录路径从来不会登记成自写，不排除的话每次自动保存都被判成外部改动白刷一次；整批只有目录（新建空文件夹）时仍然通知。新增 4 项断言；`MARKFRAME_TEST_AUTOSAVE` 自检复测：连续两次自动保存，监听日志 0 条，外部改动仍 1 条 |
 | v0.10.10 | 在文件树里点开子文件夹、再打开里面的文件，根目录会跟着跳进那一层（打开一个文件就往里钻一层），用户选中的文件夹位置被顶掉 | 「根跟随文档」补一条边界：**文件已经在当前根之内就保持根不动**，只展开祖先并高亮；只有打开根外的文件（或还没有根）时才跟到它的父文件夹。底部操作条新增「上级目录」按钮（`parentDir(root)` → `library.setRoot`），到磁盘根时禁用并把 tooltip 改成「已经是顶层目录」，样式 `.mf-lib-act:disabled`。新增 3 项断言（根内不换根 / 根外才跟随 / 上级按钮回退且到顶层禁用） |
 | v0.10.11 | ①重启后永远是空白窗口，得重新找上次在写的文件；②同一个文件在文件树里再点一次会再开一份（同一文件两个窗口） | ①**会话恢复**：`load(path:)` 一进来就记 `intendedPath`（早于异步加载，恢复期间不会漏窗口），`persistSession()` 把「开着的文档」写进 `mf.openFiles`、活动文件写 `mf.activeFile`——加载文档、开窗、关窗、退出时更新；启动时没有命令行参数就按列表恢复：删掉的不恢复、上限 10 个、其余并进同一标签组（`addTabbedWindow`），上次活动的窗口置前。关窗时同步更新，但 `isTerminating` 期间跳过——否则退出时窗口回调会把刚存好的会话清空。②**打开去重**：`openFile(at:)` 先在所有窗口里找 `currentPath` / `intendedPath` 相同的（`resolvingSymlinksInPath` 归一化，`/tmp` 与 `/private/tmp` 算同一个文件），命中就 `makeKeyAndOrderFront` 把那个窗口提到前面，不再新建；「在新窗口打开」保持原样（显式要求新窗口）。原生改动，无新增 JS 断言（Swift 侧仍无测试目标，见 `T8`），靠启动日志实测：重复打开打印 `already open, focusing …`，重启打印 `restore session: 2 file(s)` |
+| v0.11.0 | 发布线没有 CI、原生层没有自动化测试、表格窄列折行、孤儿脚注无提示；另外快速打开返回的 `/private/var` 路径与文件树根不一致 | ①**CI**：GitHub Actions macOS runner 安装锁定的 `playwright-core` 与隔离 Chromium，依次跑原生测试、`build.sh --keep`、两套 JS 断言、PDF 回归；新增 `package-lock.json`，测试浏览器支持 `MARKFRAME_TEST_CHROME`，不再硬编码本机 Chrome。②**T8**：抽出不依赖窗口的 `MFPath`（软链比较、`/private` 归一化、根目录越界、会话恢复过滤），文件树与 AppDelegate 改为复用它；新增 7 组原生场景覆盖路径、会话、JS 字面量、文件增删改移/撤销/越界、列表排序与快速打开索引。完整 Xcode 下由 XCTest 运行；只有 Command Line Tools 时 `test/native.sh` 编译同一组场景运行，避免本机装不了 XCTest 就完全没测试。③**T10**：按单元格实际显示宽度（CJK 记 2）生成 `<colgroup>`，`table-layout: fixed`，长内容列最高 32 权重、短列最低 6，打印样式同步；表格序列化不变。④**F7c**：`refreshFootnotes()` 在渲染与画笔后比对引用，给无引用定义加 `.md-fn-orphan` 和「无引用」提示、隐藏返回箭头，不改 Markdown。⑤**F16**：新增 `release.sh`（签名/打包/可选公证）与 DMG 内 Applications 快捷方式；`Info.plist` 版本从 0.3.1 补到 0.11.0。⑥**顺带修路径 bug**：`libraryAllFiles` 统一 `/private` 前缀，快速打开不再算出错误相对路径。新增 8 项 JS 断言、7 组原生场景 |
 ---
 
 ## 五、已知限制（面向使用者）
 
 - **表格单元格里不能换行**：Enter 在单元格内被拦掉。
 - **超高段落按字符切分**：导出 PDF 时该段的行内格式会丢失（只影响那一段）。
-- **ad-hoc 签名**：未公证，不要直接把构建产物发给别人。
+- **默认仍是 ad-hoc 签名**：`./release.sh` 能打出 DMG，但没有 Apple Developer ID 凭据时不会公证，不要直接把产物发给别人。
+- **当前构建只含本机架构**：在 Apple Silicon 上打出的 DMG 是 arm64，Intel Mac 需要单独构建。
 
 ---
 
@@ -133,7 +130,10 @@ KaTeX 的 CSS 用相对 `url(fonts/…)`：PDF 导出要把 `fonts/` 拷进打�
 文件树开关在右上角，面板展开时会盖住面板头部的按钮。做法是展开时把开关挪到面板外侧
 （`right: calc(var(--mf-lib-w) + 10px)`）并加 `transition: right`，两个开关共用 `.mf-fab` 一套外观。
 
-**10. 主题元信息只认「独立单行指令」**
+**10. Command Line Tools 不带 XCTest，但带 Swift Testing**
+本机只有 CLT 时，`swift test` 编译 XCTest 目标会报 `unable to resolve module dependency: 'XCTest'`；Swift Testing 又有宏插件路径问题。所以原生测试拆成「共享场景 + 两种入口」：完整 Xcode 下由 XCTest 调场景，CLT 下用 `swiftc` 编一个十几行的运行器调同一组场景。不要为了跑测试去装完整 Xcode，也不要让两边各写一份断言。
+
+**11. 主题元信息只认「独立单行指令」**
 `@name` 用宽松正则会在示例文件开头的说明注释里误命中（那行也写着 `@name : …`），
 菜单里显示的是整句说明而不是主题名。现在只接受 `/* @name: x */` 这种独占一行的注释，
 或裸写的 `@name: x`；JS 与 Swift 两端用同一套规则，否则菜单名和按钮名会对不上。
@@ -142,7 +142,7 @@ KaTeX 的 CSS 用相对 `url(fonts/…)`：PDF 导出要把 `fonts/` 拷进打�
 
 ## 七、发布前检查
 
-1. `./build.sh` 能过，`test/engine.test.js` + `test/features.test.js` + `test/pdf-regression.sh` 全绿。
-2. GitHub Actions 跑通（macOS runner 上 `build.sh` + 两套断言）。
-3. `F16`：dmg + 公证，否则别人的 macOS 会拒绝运行。
-4. 仓库描述与 Topics 填上（SSH 推不了仓库设置，得走网页或 API）。
+1. `./build.sh` 能过，`test/engine.test.js` + `test/features.test.js` + `test/native.sh` + `test/pdf-regression.sh` 全绿。
+2. GitHub Actions 跑通（`.github/workflows/ci.yml`，macOS runner 上构建 + 三套测试 + PDF 回归）。**本地已配置，首次远端运行待推送后确认。**
+3. `F16`：`./release.sh` 已能产出 DMG；公证仍需 Developer ID 证书和 Apple 账号。
+4. 仓库描述与 Topics 填上（SSH 推不了仓库设置，得走网页或 API）。**仍待手动完成。**

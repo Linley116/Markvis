@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-103%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-239%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -21,7 +21,7 @@ MarkFrame is a WYSIWYG Markdown editor for macOS. You type Markdown in a live-pr
 
 It started as an experiment: I reverse-engineered Typora's architecture with REA (Reverse Engineer Anything), then rebuilt the same design from scratch to see whether the ideas actually hold up. They do — and the interesting parts are documented in the code.
 
-It is **not** a Typora replacement and does not aim to be. It is a working, readable implementation of the same core ideas: about 5,600 lines of Swift + JavaScript with zero third-party runtime dependencies.
+It is **not** a Typora replacement and does not aim to be. It is a working, readable implementation of the same core ideas, with zero third-party runtime dependencies.
 
 ### Why it is not Electron
 
@@ -29,11 +29,11 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. MarkFrame does t
 
 | | Electron apps | MarkFrame |
 |---|---|---|
-| Binary size | ~150 MB | **~3.6 MB** (2.5 MB of it is Mermaid) |
+| Binary size | ~150 MB | **~3.7 MB** (about 2.5 MB of it is Mermaid); DMG is ~1.7 MB |
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The whole editor is ~6,940 lines: 1,440 Swift, 3,760 web core, 600 features, 1,130 tests.
+The project is currently about 12,222 lines: 2,382 Swift, 5,295 web core, 2,123 features, and 2,422 tests.
 
 ### Features
 
@@ -45,11 +45,12 @@ The whole editor is ~6,940 lines: 1,440 Swift, 3,760 web core, 600 features, 1,1
 | **200 ms brush** | Only dirty blocks get re-rendered; identical HTML means zero DOM writes |
 | **`expand`** | Move the caret into `**bold**`, the markers float back into view — and they are editable: delete one `*`, arrow through them, type between them |
 | **Source mode** | `Cmd+/` round-trips between rendered and raw text |
-| **Multi-document** | One document per window, native macOS tab groups (`Cmd+T`), opening a file never clobbers the current one |
-| **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-aware column widths |
+| **Multi-document** | One document per window, native macOS tab groups (`Cmd+T`), session restoration, and focusing an existing window instead of reopening the same file |
+| **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-friendly column widths |
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
-| **Outline** | `Cmd+Shift+O` or the button pinned to the window’s top-left corner — it stays in place after collapsing, so the same click reopens it; drag its right edge to resize (double-click resets, width is remembered) |
-| **File tree** | `Cmd+Shift+E` or the top-right button; lazy directory loading, inline create/rename, delete to Trash, context menu, drag to resize |
+| **Outline / file sidebar** | `Cmd+Shift+O` toggles the unified left sidebar; `Cmd+Shift+E` opens its Files tab; width is remembered |
+| **File tree** | Lazy loading, current-file highlighting, automatic external-change refresh, create/rename/duplicate/delete, sorting, in-tree drag, recent folders, and parent-directory navigation |
+| **Quick Open** | `Cmd+Shift+P` fuzzy-searches documents under the current folder and opens the keyboard-selected result |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord plus your own CSS files, switched from the status-bar theme menu (`Cmd+Shift+L` cycles) |
 | **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |
@@ -135,7 +136,7 @@ Themes are plain CSS. Drop a file into `~/Library/Application Support/MarkFrame/
 
 ### Build
 
-Requirements: macOS 13+, Swift 6 toolchain (`xcode-select --install`). No npm, no Xcode project, no dependencies.
+Requirements: macOS 13+, Swift 6 toolchain (`xcode-select --install`). The build itself needs no npm, no Xcode project, and no runtime dependencies; `playwright-core` is only used by the JS tests.
 
 ```bash
 git clone https://github.com/Linley116/markframe.git
@@ -151,6 +152,22 @@ To keep the build artifact for distribution:
 ./build.sh --keep   # leaves build/MarkFrame.app in place
 ```
 
+To produce a distributable DMG:
+
+```bash
+./release.sh        # dist/MarkFrame-<version>.dmg (ad-hoc signed, not notarized)
+```
+
+With a Developer ID certificate, sign and notarize it so other Macs open it without a Gatekeeper warning:
+
+```bash
+MARKFRAME_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+APPLE_ID="you@example.com" APPLE_TEAM_ID="TEAMID" APPLE_APP_PASSWORD="app-specific-password" \
+./release.sh
+```
+
+Alternatively store a `notarytool` keychain profile and set `MARKFRAME_NOTARY_PROFILE`. Without credentials the script says plainly that the product is packaged but not notarized.
+
 > The bundled `web/vendor/highlight.min.js` (highlight.js 11.9.0, BSD-3-Clause) is vendored on purpose so the build works offline.
 
 ### Keyboard shortcuts
@@ -164,8 +181,9 @@ To keep the build artifact for distribution:
 | Bold / Italic / Inline code | `Cmd+B` / `Cmd+I` / `Cmd+K` |
 | Toggle source mode | `Cmd+/` |
 | Find and replace | `Cmd+F` |
-| Outline | `Shift+Cmd+O` |
-| File tree | `Shift+Cmd+E` |
+| Toggle sidebar | `Shift+Cmd+O` |
+| Show file tree | `Shift+Cmd+E` |
+| Quick Open | `Shift+Cmd+P` |
 | Focus mode / Typewriter | `Shift+Cmd+F` / `Shift+Cmd+T` |
 | Next theme | `Shift+Cmd+L` |
 | Zoom in / out / reset | `Cmd++` / `Cmd+-` / `Cmd+0` |
@@ -173,13 +191,14 @@ To keep the build artifact for distribution:
 ### Tests
 
 ```bash
-NODE_PATH=./node_modules node test/engine.test.js      # 111 assertions — core loop
-NODE_PATH=./node_modules node test/features.test.js    # 77 assertions — features
+node test/engine.test.js      # 121 assertions — core loop
+node test/features.test.js    # 118 assertions — features
+./test/native.sh                                       # native Swift tests
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
 ```
 
-The JS suites drive real DOM in headless Chrome (`playwright-core` is the only dev dependency; point `NODE_PATH` at any install). The PDF regression exports a document containing a 60-row table, an 80-line code block and an end marker, then checks: multiple pages, no blank page, uniform A4 size, fill ratio, and that the marker survived.
+The JS suites drive real DOM in headless Chrome (`playwright-core` is the only dev dependency; run `npm ci` then `playwright-core install chromium`, or point `MARKFRAME_TEST_CHROME` at a browser). The native suite covers path safety, session restore, file operations and undo, tree sorting, and the Quick Open index; it runs under XCTest when Xcode is available and falls back to a lightweight runner using the same scenarios with Command Line Tools only. The PDF regression exports a document containing a 60-row table, an 80-line code block and an end marker, then checks: multiple pages, no blank page, uniform A4 size, fill ratio, and that the marker survived.
 
 ### Known limitations
 
@@ -189,11 +208,12 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 - Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
 - Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
 - Custom themes are CSS only (no scripts), and PDF export always uses the light print palette — a dark theme does not turn the PDF black.
-- The app is ad-hoc signed. Do not distribute the built `.app` without notarizing it.
+- The default build is ad-hoc signed. Do not distribute it without notarizing; `release.sh` supports Developer ID signing and notarization, but needs a developer account.
+- The DMG contains only the build machine’s architecture (arm64 on Apple Silicon); Intel Macs need a separate build.
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. Short version: unified undo stack, nested blocks, file tree, incremental save.
+See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. The current focus is CI, native XCTest, DMG packaging, and notarization; incremental save is deferred after evaluation.
 
 ### License
 

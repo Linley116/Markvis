@@ -28,7 +28,18 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { chromium } = require('playwright-core');
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const SYSTEM_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+// 本地继续用系统 Chrome（一次性 profile）；CI 没有系统 Chrome 时，
+// 使用 `playwright-core install chromium` 下载的独立浏览器。
+// 也可用 MARKFRAME_TEST_CHROME 显式指定，不会读取或修改用户浏览器数据。
+function resolveChrome() {
+  let bundled = '';
+  try { bundled = chromium.executablePath(); } catch (_) {}
+  const candidates = [process.env.MARKFRAME_TEST_CHROME, SYSTEM_CHROME, bundled];
+  return candidates.find(p => p && fs.existsSync(p)) || '';
+}
+const CHROME = resolveChrome();
 const LAUNCH_TIMEOUT_MS = 20000;
 const WATCHDOG_MAX_MS = 10 * 60 * 1000; // 看门狗最长盯 10 分钟，防自身泄漏
 const WATCHDOG_POLL_S = 0.3;
@@ -113,8 +124,8 @@ function installGuards() {
 
 // ---- 对外 API ----
 async function launchTestBrowser() {
-  if (!fs.existsSync(CHROME)) {
-    throw new Error(`未找到 Chrome：${CHROME}`);
+  if (!CHROME) {
+    throw new Error('未找到测试浏览器：请安装 Google Chrome，或运行 npx playwright-core install chromium；也可用 MARKFRAME_TEST_CHROME 指定路径');
   }
   const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'markframe-test-'));
   const chrome = spawn(CHROME, [

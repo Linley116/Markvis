@@ -1,0 +1,69 @@
+#!/bin/zsh
+# 构建可分发的 DMG。
+#   ./release.sh                  仅打包（ad-hoc 签名，未公证）
+#   MARKFRAME_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" ./release.sh
+#                                 用 Developer ID 签名
+#   再提供 Apple 公证凭据即自动提交公证并装订票据：
+#     APPLE_ID=... APPLE_TEAM_ID=... APPLE_APP_PASSWORD=... ./release.sh
+#   或使用已保存的 notarytool 钥匙串配置：
+#     MARKFRAME_NOTARY_PROFILE=markframe ./release.sh
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+APP="$ROOT/build/MarkFrame.app"
+DIST="$ROOT/dist"
+VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT/Info.plist")"
+DMG="$DIST/MarkFrame-$VERSION.dmg"
+IDENTITY="${MARKFRAME_SIGN_IDENTITY:-}"
+
+if [[ "$IDENTITY" == "-" ]]; then IDENTITY=""; fi
+
+echo "==> build $VERSION"
+"$ROOT/build.sh" --keep >/dev/null
+
+if [[ -n "$IDENTITY" ]]; then
+  echo "==> sign with $IDENTITY"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+  codesign --verify --deep --strict --verbose=2 "$APP"
+else
+  echo "==> no MARKFRAME_SIGN_IDENTITY：保留 ad-hoc 签名"
+fi
+
+echo "==> stage DMG"
+STAGE="$ROOT/build/dmg-stage"
+rm -rf "$STAGE"
+mkdir -p "$STAGE" "$DIST"
+cp -R "$APP" "$STAGE/MarkFrame.app"
+ln -s /Applications "$STAGE/Applications"
+rm -f "$DMG"
+hdiutil create -quiet -volname "MarkFrame $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+hdiutil verify -quiet "$DMG"
+
+if [[ -n "$IDENTITY" ]]; then
+  codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+fi
+
+NOTARY_ARGS=()
+if [[ -n "${MARKFRAME_NOTARY_PROFILE:-}" ]]; then
+  NOTARY_ARGS=(--keychain-profile "$MARKFRAME_NOTARY_PROFILE")
+elif [[ -n "${APPLE_ID:-}" && -n "${APPLE_TEAM_ID:-}" && -n "${APPLE_APP_PASSWORD:-}" ]]; then
+  NOTARY_ARGS=(--apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD")
+fi
+
+if [[ ${#NOTARY_ARGS[@]} -gt 0 ]]; then
+  if [[ -z "$IDENTITY" || "$IDENTITY" != Developer\ ID\ Application:* ]]; then
+    echo "!! 公证需要 Developer ID Application 证书；当前不是，跳过公证" >&2
+    exit 3
+  fi
+  echo "==> notarize（可能需要几分钟）"
+  xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait
+  xcrun stapler staple "$DMG"
+  xcrun stapler validate "$DMG"
+  spctl --assess --type open --context context:primary-signature -v "$DMG"
+  echo "==> notarized + stapled"
+else
+  echo "!! 未提供公证凭据：这个 DMG 已打包，但其他 Mac 上仍可能被 Gatekeeper 拦截" >&2
+fi
+
+echo "==> done: $DMG"
+du -sh "$DMG"

@@ -1,0 +1,17 @@
+{
+  "name": "markframe",
+  "version": "0.11.0",
+  "private": true,
+  "description": "Native Cocoa + WKWebView Markdown editor for macOS",
+  "scripts": {
+    "test": "npm run test:engine && npm run test:features && npm run test:native",
+    "test:engine": "node test/engine.test.js",
+    "test:features": "node test/features.test.js",
+    "test:native": "./test/native.sh",
+    "test:pdf": "./test/pdf-regression.sh",
+    "test:browser:install": "playwright-core install chromium"
+  },
+  "devDependencies": {
+    "playwright-core": "1.58.2"
+  }
+}

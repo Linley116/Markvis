@@ -488,6 +488,62 @@ function check(name, cond, extra) {
   });
   check('脚注原子后的光标偏移正确', fnCaret === '引用[^1]X 后续', JSON.stringify(fnCaret));
 
+  const orphan = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = '正文引用[^used]。\n\n[^used]: 有引用\n[^lost]: 没人引用这条';
+    window.__loadContent('', src, 't');
+    await wait(120);
+    const defs = [...document.querySelectorAll('[mdtype="def_footnote"]')].map(x => ({
+      label: x.getAttribute('data-label'),
+      orphan: x.classList.contains('md-fn-orphan'),
+      title: x.getAttribute('title'),
+      back: x.querySelector('.md-fn-back').getAttribute('title')
+    }));
+    const md = window.__getMarkdown();
+    window.__loadContent('', '正文没有引用了。\n\n[^used]: 有引用\n[^lost]: 没人引用这条', 't');
+    await wait(120);
+    const after = [...document.querySelectorAll('[mdtype="def_footnote"]')]
+      .map(x => x.classList.contains('md-fn-orphan'));
+    return { defs, md, after };
+  });
+  check('被引用的脚注不标记孤儿', orphan.defs[0] && !orphan.defs[0].orphan, JSON.stringify(orphan.defs));
+  check('没有引用的脚注标为孤儿并给出提示',
+        orphan.defs[1] && orphan.defs[1].orphan && /没有正文引用/.test(orphan.defs[1].title) &&
+        /没有引用可返回/.test(orphan.defs[1].back),
+        JSON.stringify(orphan.defs[1]));
+  check('删掉引用后两条定义都变成孤儿', JSON.stringify(orphan.after) === '[true,true]', JSON.stringify(orphan.after));
+  check('孤儿标记不改写 Markdown',
+        /\[\^lost\]: 没人引用这条/.test(orphan.md) && /\[\^used\]: 有引用/.test(orphan.md),
+        JSON.stringify(orphan.md));
+
+  console.log('\n[7.9b] 表格列宽（T10）');
+  const tableWidth = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = [
+      '| ID | 说明 | 状态 |',
+      '|---|---|---|',
+      '| 1 | 这是一段明显更长的说明文字，用来验证长内容列获得更多宽度而不是被挤成多行。 | 通过 |',
+      '| 2 | 短 | 未通过 |'
+    ].join('\n');
+    window.__loadContent('', src, 't');
+    await wait(120);
+    const table = document.querySelector('table.md-table');
+    const cols = [...table.querySelectorAll('col')].map(c => parseFloat(c.style.width));
+    const layout = getComputedStyle(table).getPropertyValue('table-layout').trim();
+
+    const cjk = '| 中文 | abcd |\n|---|---|\n| 中文 | abcd |';
+    window.__loadContent('', cjk, 't');
+    await wait(120);
+    const balanced = [...document.querySelector('table.md-table').querySelectorAll('col')]
+      .map(c => parseFloat(c.style.width));
+    return { count: cols.length, cols, layout, balanced };
+  });
+  check('表格生成与列数一致的 colgroup', tableWidth.count === 3, JSON.stringify(tableWidth.cols));
+  check('表格使用固定布局', tableWidth.layout === 'fixed', tableWidth.layout);
+  check('长内容列分到更多宽度', tableWidth.cols[1] > 60 && tableWidth.cols[0] < 20, JSON.stringify(tableWidth.cols));
+  check('CJK 宽度按两倍计算（「中文」≈ abcd）', Math.abs(tableWidth.balanced[0] - tableWidth.balanced[1]) < 1,
+        JSON.stringify(tableWidth.balanced));
+
   const spell = await page.evaluate(() => {
     const write = document.getElementById('write');
     const before = write.getAttribute('spellcheck');

@@ -113,12 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 打不开的（已删除/改名）直接跳过，不弹窗打扰。
     @discardableResult
     private func restoreSession(into primary: EditorWindowController) -> Bool {
-        let fm = FileManager.default
-        let saved = (UserDefaults.standard.stringArray(forKey: openFilesKey) ?? [])
-            .filter { !$0.isEmpty && fm.fileExists(atPath: $0) }
-        guard !saved.isEmpty else { return false }
-
-        let files = Array(saved.prefix(maxRestoredFiles))
+        let saved = UserDefaults.standard.stringArray(forKey: openFilesKey) ?? []
+        let files = MFPath.restorableFiles(saved, limit: maxRestoredFiles)
+        guard !files.isEmpty else { return false }
         mfLog("restore session: \(files.count) file(s) → \(files.prefix(3))")
         primary.load(path: files[0])
 
@@ -142,13 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    /// 路径比较：/tmp 与 /private/tmp 这类软链差异也要认成同一个文件
     private func samePath(_ a: String, _ b: String) -> Bool {
-        if a.isEmpty || b.isEmpty { return false }
-        if a == b { return true }
-        let ua = URL(fileURLWithPath: a).resolvingSymlinksInPath().path
-        let ub = URL(fileURLWithPath: b).resolvingSymlinksInPath().path
-        return ua == ub
+        MFPath.same(a, b)
     }
 
     // MARK: - 崩溃恢复

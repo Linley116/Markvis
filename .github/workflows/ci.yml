@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JavaScript test dependency
+        run: npm ci
+
+      - name: Install isolated test browser
+        run: npx playwright-core install chromium
+
+      - name: Run native XCTest suite
+        run: ./test/native.sh
+
+      - name: Build application
+        run: ./build.sh --keep
+
+      - name: Run engine assertions
+        run: npm run test:engine
+
+      - name: Run feature assertions
+        run: npm run test:features
+
+      - name: Run PDF regression
+        run: npm run test:pdf

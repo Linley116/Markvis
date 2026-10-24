@@ -296,7 +296,8 @@ table.md-table {
   width: 100%;
   margin: 0 0 1.2em;
   font-size: .94em;
-  table-layout: auto;
+  /* 列宽由 renderBlock 按内容生成 <colgroup>，固定布局避免窄列被自动布局压到折行 */
+  table-layout: fixed;
 }
 
 .md-table th,
@@ -304,7 +305,7 @@ table.md-table {
   border: 1px solid var(--border);
   padding: 6px 10px;
   vertical-align: top;
-  min-width: 6em;
+  min-width: 0;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
@@ -409,6 +410,16 @@ a:hover { text-decoration: underline; }
 }
 
 .md-fn-back:hover, .md-fn-mark:hover { color: var(--accent); }
+
+/* 引用的脚注被删掉后，定义仍在文末：只做提示，不擅自删除正文。 */
+.md-fn-orphan { border-top-color: var(--mark); }
+.md-fn-orphan .md-fn-mark { color: var(--mark); }
+.md-fn-orphan .md-fn-mark::after {
+  content: " 无引用";
+  font-size: .82em;
+  opacity: .75;
+}
+.md-fn-orphan .md-fn-back { visibility: hidden; }
 
 .md-toc {
   border-left: 2px solid var(--border);

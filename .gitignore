@@ -1,6 +1,11 @@
 # build output (build.sh installs to ~/Applications and removes this)
 build/
+dist/
+.build/
 *.app
+
+# JavaScript test dependencies
+node_modules/
 
 # macOS
 .DS_Store
