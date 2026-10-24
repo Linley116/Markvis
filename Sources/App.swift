@@ -305,7 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openItem.keyEquivalentModifierMask = [.command]
 
         // 快速打开：模糊搜当前文件夹里的文件（Typora 的 Open Quickly）
-        // 用 Cmd+Shift+P —— Cmd+P 留给打印，macOS 上 Typora 用 Cmd+Shift+O，
+        // 用 Cmd+Shift+P；Cmd+P 目前未绑定，macOS 上 Typora 用 Cmd+Shift+O，
         // 而我们的 Cmd+Shift+O 已经是侧栏开关
         let quick = fileMenu.addItem(withTitle: L10n.t("Open Quickly…", "快速打开…"),
                                      action: #selector(quickOpen(_:)), keyEquivalent: "P")
