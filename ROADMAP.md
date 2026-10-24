@@ -1,6 +1,6 @@
 # MarkFrame 路线图
 
-> **基线 v0.10.10** · 11,724 行（engine 3,497 / html2md 311 / css 1,391 / features 2,123 / Swift 2,260 / tests 2,142）
+> **基线 v0.10.11** · 11,817 行（engine 3,497 / html2md 311 / css 1,391 / features 2,123 / Swift 2,353 / tests 2,142）
 > **231 项断言全绿**（引擎 113 + 功能 118）+ 原生文件操作自检 + PDF 内容回归 · 包体 3.8 MB
 > 仓库：<https://github.com/Linley116/markframe>
 
@@ -87,6 +87,7 @@
 | v0.10.8 | 边打字文件树每 1.2s 刷新一次（v0.10.4 的 FSEvents 监听被自动保存触发）；另外「快速打开」缺失 | ①**修监听自触发**：自动保存/Cmd+S 改用自实现的 `writeAtomic`（临时文件自己命名 `.mf-tmp-<uuid>`，系统 `write(atomically:)` 的随机临时名认不出来），写盘前把「目标 + 临时」两个路径登记进 `selfWritePaths`；FSEvents 加 `kFSEventStreamCreateFlagFileEvents` 拿到具体文件路径，一批事件全是自己刚写过的路径就整批丢弃。**坑**：FSEvents 报的是真实路径（`/tmp` → `/private/tmp` 软链），两侧要统一去掉 `/private` 前缀才对得上（`URL.resolvingSymlinksInPath()` 在这不起作用）。文件树自身的增删改名也照样登记。自检新增 `MARKFRAME_TEST_AUTOSAVE`（打开文档后连写两次，监听日志应为 0 条；外部改动仍应为 1 条）。②**F11 快速打开**：新增 `features/quickopen.js` + 原生 `library.allFiles`（遍历根目录、按类型过滤、最多 5000 条、按修改时间倒序）；子序列模糊匹配（开头/分词边界/文件名命中加分），↑↓ 选择、Enter 打开、Esc 关闭、点遮罩关闭，清单缓存 30s（文件树变了作废）。`Cmd+Shift+P` + 文件菜单「快速打开…」（`Cmd+P` 留给 `F18` 打印）。新增 6 项断言 |
 | v0.10.9 | 打开文件夹后，鼠标移到某个文件夹上，已展开的层级会自己收起来（箭头还开着，里面却是空的） | 根因是刷新只重拉根目录：`refresh()` 把整棵缓存清空后只 `loadDir(root)`，已展开的子目录拿不到内容，`treeHTML` 就不渲染子项；而 `state.expanded` 还留着 `true`，于是箭头朝下、内容为空，再点一下反而变成「收起」。三处修：①`refresh()` 改成「根 + 所有已展开且已加载的目录」一起重拉（`loadDir(path, cb, force)`），期间继续用旧缓存渲染、全部回来再一次性重绘，不闪不塌；②新增 `isOpen(path)` = 展开 **且** 有缓存，箭头、递归、点击三处统一用它，渲染状态和真实状态不再错位；③重绘保留 `scrollTop`，并把对当前文件的强制 `scrollIntoView` 从 `render()` 挪到 `revealFile()`，刷新不会把用户正在看的位置拽走。原生侧：判断「这批事件是不是自己写盘」时先排除目录条目——替换文件会连带改父目录 mtime，而目录路径从来不会登记成自写，不排除的话每次自动保存都被判成外部改动白刷一次；整批只有目录（新建空文件夹）时仍然通知。新增 4 项断言；`MARKFRAME_TEST_AUTOSAVE` 自检复测：连续两次自动保存，监听日志 0 条，外部改动仍 1 条 |
 | v0.10.10 | 在文件树里点开子文件夹、再打开里面的文件，根目录会跟着跳进那一层（打开一个文件就往里钻一层），用户选中的文件夹位置被顶掉 | 「根跟随文档」补一条边界：**文件已经在当前根之内就保持根不动**，只展开祖先并高亮；只有打开根外的文件（或还没有根）时才跟到它的父文件夹。底部操作条新增「上级目录」按钮（`parentDir(root)` → `library.setRoot`），到磁盘根时禁用并把 tooltip 改成「已经是顶层目录」，样式 `.mf-lib-act:disabled`。新增 3 项断言（根内不换根 / 根外才跟随 / 上级按钮回退且到顶层禁用） |
+| v0.10.11 | ①重启后永远是空白窗口，得重新找上次在写的文件；②同一个文件在文件树里再点一次会再开一份（同一文件两个窗口） | ①**会话恢复**：`load(path:)` 一进来就记 `intendedPath`（早于异步加载，恢复期间不会漏窗口），`persistSession()` 把「开着的文档」写进 `mf.openFiles`、活动文件写 `mf.activeFile`——加载文档、开窗、关窗、退出时更新；启动时没有命令行参数就按列表恢复：删掉的不恢复、上限 10 个、其余并进同一标签组（`addTabbedWindow`），上次活动的窗口置前。关窗时同步更新，但 `isTerminating` 期间跳过——否则退出时窗口回调会把刚存好的会话清空。②**打开去重**：`openFile(at:)` 先在所有窗口里找 `currentPath` / `intendedPath` 相同的（`resolvingSymlinksInPath` 归一化，`/tmp` 与 `/private/tmp` 算同一个文件），命中就 `makeKeyAndOrderFront` 把那个窗口提到前面，不再新建；「在新窗口打开」保持原样（显式要求新窗口）。原生改动，无新增 JS 断言（Swift 侧仍无测试目标，见 `T8`），靠启动日志实测：重复打开打印 `already open, focusing …`，重启打印 `restore session: 2 file(s)` |
 ---
 
 ## 五、已知限制（面向使用者）

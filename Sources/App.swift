@@ -31,6 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingOpen = nil
             wc.load(path: path)
             noteRecent(path)
+        } else if !restoreSession(into: wc) {
+            // 没有上次的会话：就是一个空白窗口
+            wc.window?.makeKeyAndOrderFront(nil)
         }
 
         // 上次异常退出留下的未命名文档：提示恢复
@@ -51,7 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeController() -> EditorWindowController {
         let wc = EditorWindowController()
-        wc.onOpenFile = { [weak self] path in self?.noteRecent(path) }
+        wc.onOpenFile = { [weak self] path in
+            self?.noteRecent(path)
+            self?.persistSession()
+        }
         wc.requestOpenFile = { [weak self] path in self?.openFile(at: path) }
         wc.requestOpenInNewWindow = { [weak self] path in self?.openFileInNewWindow(at: path) }
         windowControllers.append(wc)
@@ -73,6 +79,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func windowWillClose(_ note: Notification) {
         guard let w = note.object as? NSWindow else { return }
         windowControllers.removeAll { $0.window === w }
+        // 退出过程中窗口也会走这里，别把刚要保存的会话清空
+        if !isTerminating { persistSession() }
+    }
+
+    /// 正在退出：此时 windowWillClose 不应再改写会话
+    private var isTerminating = false
+
+    // MARK: - 会话（下次启动恢复上次开着的文档）
+
+    private let openFilesKey = "mf.openFiles"
+    private let activeFileKey = "mf.activeFile"
+    /// 恢复上限：和「最近打开」一样取 10，再多启动就慢了
+    private let maxRestoredFiles = 10
+
+    /// 记下当前开着的文档。用 intendedPath（load 一进来就设好）而不是
+    /// currentPath —— 启动恢复时几个窗口在先后加载，用 currentPath 会把
+    /// 还没加载完的窗口漏掉。
+    private func persistSession() {
+        let files = windowControllers
+            .map { $0.currentPath.isEmpty ? $0.intendedPath : $0.currentPath }
+            .filter { !$0.isEmpty }
+        UserDefaults.standard.set(files, forKey: openFilesKey)
+
+        if let wc = windowControllers.first(where: { $0.window === NSApp.keyWindow }),
+           !(wc.currentPath.isEmpty && wc.intendedPath.isEmpty) {
+            let p = wc.currentPath.isEmpty ? wc.intendedPath : wc.currentPath
+            UserDefaults.standard.set(p, forKey: activeFileKey)
+        }
+    }
+
+    /// 启动时把上次开着的文档原样打开。返回 false 表示没有可恢复的会话。
+    /// 打不开的（已删除/改名）直接跳过，不弹窗打扰。
+    @discardableResult
+    private func restoreSession(into primary: EditorWindowController) -> Bool {
+        let fm = FileManager.default
+        let saved = (UserDefaults.standard.stringArray(forKey: openFilesKey) ?? [])
+            .filter { !$0.isEmpty && fm.fileExists(atPath: $0) }
+        guard !saved.isEmpty else { return false }
+
+        let files = Array(saved.prefix(maxRestoredFiles))
+        mfLog("restore session: \(files.count) file(s) → \(files.prefix(3))")
+        primary.load(path: files[0])
+
+        // 其余文件并进同一个标签组（而不是散成 N 个窗口）
+        if let primaryWindow = primary.window {
+            for p in files.dropFirst() {
+                let wc = makeController()
+                wc.load(path: p)
+                if let w = wc.window {
+                    primaryWindow.addTabbedWindow(w, ordered: .above)
+                }
+            }
+        }
+
+        // 上次活动的那个窗口提到前面（不改标签顺序）
+        let active = UserDefaults.standard.string(forKey: activeFileKey) ?? ""
+        let target = windowControllers.first {
+            samePath($0.intendedPath, active) || samePath($0.currentPath, active)
+        } ?? primary
+        target.window?.makeKeyAndOrderFront(nil)
+        return true
+    }
+
+    /// 路径比较：/tmp 与 /private/tmp 这类软链差异也要认成同一个文件
+    private func samePath(_ a: String, _ b: String) -> Bool {
+        if a.isEmpty || b.isEmpty { return false }
+        if a == b { return true }
+        let ua = URL(fileURLWithPath: a).resolvingSymlinksInPath().path
+        let ub = URL(fileURLWithPath: b).resolvingSymlinksInPath().path
+        return ua == ub
     }
 
     // MARK: - 崩溃恢复
@@ -108,6 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 正常退出时，把「没有未保存修改」的窗口的恢复文件清掉；
     /// 有未保存内容的窗口保留，下次启动还能恢复。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        isTerminating = true
+        persistSession()   // 退出前把开着的文档记下来，下次启动恢复
         for wc in windowControllers where !(wc.window?.isDocumentEdited ?? false) {
             wc.discardRecovery()
         }
@@ -116,11 +194,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - 打开文件
 
-    /// 打开文件的统一入口：空白未编辑窗口就地复用，否则开新窗口
-    /// （系统偏好设为「总是」时会自动并入标签组）
+    /// 打开文件的统一入口：已经开着就聚焦那个窗口；空白未编辑窗口就地复用；
+    /// 否则开新窗口（系统偏好设为「总是」时会自动并入标签组）
     func openFile(at path: String) {
         if windowControllers.isEmpty {
             pendingOpen = path
+            return
+        }
+        // 同一个文件已经在某个窗口里（含正在加载的）→ 切过去，别开第二份
+        if let existing = windowControllers.first(where: {
+            samePath($0.currentPath, path) || samePath($0.intendedPath, path)
+        }) {
+            mfLog("openFile: already open, focusing \(path)")
+            existing.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            noteRecent(path)
             return
         }
         if let wc = activeController ?? windowControllers.last, wc.isReusable {

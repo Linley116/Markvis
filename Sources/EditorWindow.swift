@@ -364,6 +364,10 @@ final class EditorWindowController: NSWindowController {
     private(set) var bridge: Bridge!
     private(set) var currentPath: String = ""
 
+    /// 这个窗口「打算」打开的路径。`load` 一进来就写，早于异步的窗口恢复，
+    /// 也用于判断某个文件是不是已经在这个窗口里开着了（避免重复打开）。
+    private(set) var intendedPath: String = ""
+
     /// 成功打开文件后回调（AppDelegate 用来记「最近打开」）
     var onOpenFile: ((String) -> Void)?
 
@@ -1247,6 +1251,7 @@ final class EditorWindowController: NSWindowController {
     }
 
     func load(path: String) {
+        intendedPath = path
         // 页面还没加载完时先排队，等 didFinish 再执行（否则 evaluate 会丢失）
         if webView.isLoading || webView.url == nil {
             pendingLoadPath = path
