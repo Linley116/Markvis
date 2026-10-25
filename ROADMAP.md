@@ -2,7 +2,7 @@
 
 > **基线 v0.13.0** · 12,811 行（engine 3,582 / html2md 311 / css 1,442 / features 2,442 / Swift 2,555 / tests 2,479）
 > **247 项 JS 断言全绿**（引擎 121 + 功能 126）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.8 MB / DMG 1.7 MB
-> **CI 已跑通**：GitHub Actions run 40065959796（原生 XCTest / 构建 / JS / PDF 全部 success）
+> **CI 为手动触发**：日常 push / PR 不自动跑；需要完整验证时在 Actions → CI → Run workflow。上次 run 40065959796（原生 XCTest / 构建 / JS / PDF）全部 success。
 > 仓库：<https://github.com/Linley116/Markvis>
 
 图例：✅ 已完成 · 🚧 进行中 · ⬜ 未开始 · 规模 **S** < 200 行 / **M** 200–600 行 / **L** 需要改架构
@@ -150,8 +150,10 @@ PDF 回归原来 `sleep 14`，本机够用，CI 上文件还没写完就判失�
 ## 七、发布前检查
 
 1. `./build.sh` 能过，`test/engine.test.js` + `test/features.test.js` + `test/native.sh` + `test/pdf-regression.sh` 全绿。
-2. ✅ GitHub Actions 跑通（`.github/workflows/ci.yml`，macOS 15 runner 上构建 + 三套测试 + PDF 回归）：2026-10-24 run `40065959796` 全部 success。
+2. ✅ GitHub Actions 可手动触发（`.github/workflows/ci.yml`，macOS 15 runner 上构建 + 三套测试 + PDF 回归）。2026-10-25 起取消 push / PR 自动触发，日常提交不跑 CI；上次自动运行 `40065959796` 全部 success。
 3. ✅ `F16` 决策完成：不公证，对外只提供源码；`release.sh` 的 DMG 不对外发布。
 4. 仓库描述与 Topics 填上（SSH 推不了仓库设置，得走网页或 API）。描述已设置；Topics 仍需补齐。
 
 > **发布策略（2026-10-24）**：不做 Apple 公证分发。个人开发者证书会把法定姓名和 Team ID 写进签名，公开下载还会让用户面对 Gatekeeper；因此 README 只引导从源码构建，DMG 脚本留在维护者侧。
+
+> **CI 策略（2026-10-25）**：日常 push / PR 不自动跑 CI，避免每次提交都等 Actions；workflow 保留 `workflow_dispatch`，需要完整验证时手动触发。日常改动以本地 `npm test` + `test/pdf-regression.sh` 为准。

@@ -6,7 +6,6 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 

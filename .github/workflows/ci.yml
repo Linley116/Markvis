@@ -1,9 +1,7 @@
 name: CI
 
+# 日常 push / PR 不自动跑；需要完整验证时在 Actions 页面手动 Run workflow。
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
