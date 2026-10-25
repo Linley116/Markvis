@@ -973,6 +973,29 @@ function check(name, cond, extra) {
   check('PDF 分页展开 HTML 块', hbEdit.printHasRaw && !hbEdit.printHasIframe,
         JSON.stringify([hbEdit.printHasRaw, hbEdit.printHasIframe]));
 
+  console.log('\n[7.6] 超高段落分页保留行内格式');
+  const tall = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const parts = [];
+    for (let i = 0; i < 1200; i++) parts.push(`**B${i}** T${i}`);
+    window.__loadContent('', '# 长段落\n\n' + parts.join(' '), 'tall.md');
+    await wait(400);
+    const pages = window.__paginateForPrint();
+    const html = pages.pages.join('');
+    return {
+      pageCount: pages.pages.length,
+      strong: (html.match(/mdtype="strong"/g) || []).length,
+      first: html.indexOf('B0') >= 0,
+      last: html.indexOf('B1199') >= 0,
+      rawMarks: html.indexOf('**') >= 0,
+      continuationStrong: pages.pages.slice(1).every(p => p.indexOf('mdtype="strong"') >= 0)
+    };
+  });
+  check('超高段落拆成多页', tall.pageCount >= 2, String(tall.pageCount));
+  check('拆分后保留 strong 结构', tall.strong >= 1000 && !tall.rawMarks, JSON.stringify(tall));
+  check('拆分后内容完整且续页仍有格式',
+        tall.first && tall.last && tall.continuationStrong, JSON.stringify(tall));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

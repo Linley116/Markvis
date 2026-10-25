@@ -3348,35 +3348,158 @@
     return out;
   }
 
-  function textSlice(el, t) {
-    var sh = emptyShell(el);
-    sh.textContent = t;
-    return sh;
+  function cleanInlineNoise(root) {
+    var noise = root.querySelectorAll('.md-meta, .md-fn-back, .mf-anchor');
+    for (var i = 0; i < noise.length; i++) {
+      if (noise[i].parentNode) noise[i].parentNode.removeChild(noise[i]);
+    }
+    var texts = [];
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    while (walker.nextNode()) texts.push(walker.currentNode);
+    for (var j = 0; j < texts.length; j++) {
+      var t = texts[j];
+      t.nodeValue = t.nodeValue.replace(/\u200b/g, '');
+      if (!t.nodeValue && t.parentNode) t.parentNode.removeChild(t);
+    }
   }
 
-  /** 段落/标题：按字符二分截断（只作用于超高段落，会丢失行内格式） */
+  /** 行内原子：不可从中间切开的节点，按 1 个字符权重算 */
+  function inlineAtomic(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.tagName === 'BR') return !isPad(node);
+    if (node.tagName === 'IMG' || node.tagName === 'SVG') return true;
+    if (node.getAttribute && node.getAttribute('mdtype') === 'math_inline') return true;
+    if (node.classList && (node.classList.contains('md-math') || node.classList.contains('md-fn-ref'))) {
+      return true;
+    }
+    return false;
+  }
+
+  function inlineWeight(node) {
+    if (!node) return 0;
+    if (node.nodeType === 3) return node.nodeValue.length;
+    if (node.nodeType !== 1) return 0;
+    if (inlineAtomic(node)) return 1;
+    var total = 0;
+    for (var i = 0; i < node.childNodes.length; i++) total += inlineWeight(node.childNodes[i]);
+    return total;
+  }
+
+  /** 找到「从内容起点数 n 个字符」处的 Range 边界 */
+  function inlineBoundaryAt(root, target) {
+    if (target <= 0) return { node: root, offset: 0 };
+    var remaining = target;
+    var result = null;
+
+    function walk(parent) {
+      for (var i = 0; i < parent.childNodes.length; i++) {
+        var node = parent.childNodes[i];
+
+        if (remaining === 0) {
+          result = { node: parent, offset: i };
+          return true;
+        }
+        if (node.nodeType === 3) {
+          var len = node.nodeValue.length;
+          if (remaining < len) {
+            result = { node: node, offset: remaining };
+            return true;
+          }
+          remaining -= len;
+          if (remaining === 0) {
+            result = { node: node, offset: len };
+            return true;
+          }
+          continue;
+        }
+        if (node.nodeType !== 1) continue;
+
+        if (inlineAtomic(node)) {
+          remaining -= 1;
+          if (remaining === 0) {
+            result = { node: parent, offset: i + 1 };
+            return true;
+          }
+          continue;
+        }
+        if (walk(node)) return true;
+      }
+      return false;
+    }
+
+    if (walk(root)) return result;
+    return { node: root, offset: root.childNodes.length };
+  }
+
+  function inlinePrefixFragment(work, count) {
+    var r = document.createRange();
+    r.selectNodeContents(work);
+    var b = inlineBoundaryAt(work, count);
+    try {
+      r.setEnd(b.node, b.offset);
+    } catch (e) {
+      return document.createDocumentFragment();
+    }
+    return r.cloneContents();
+  }
+
+  function removeInlinePrefix(work, count) {
+    var r = document.createRange();
+    r.selectNodeContents(work);
+    var b = inlineBoundaryAt(work, count);
+    try {
+      r.setEnd(b.node, b.offset);
+      r.deleteContents();
+    } catch (e) {}
+  }
+
+  function pruneInline(root) {
+    var els = root.querySelectorAll('span, a, strong, em, code, del, sup, sub, mark');
+    for (var i = els.length - 1; i >= 0; i--) {
+      var el = els[i];
+      if (el.textContent.trim()) continue;
+      if (el.querySelector('img, br, svg')) continue;
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }
+  }
+
+  /**
+   * 段落/标题：按行内字符二分截断，保留 strong/em/a/code/img/br 等结构。
+   * 只用于超过一页的普通块。
+   */
   function splitPlainText(el, content) {
-    var text = el.textContent || '';
-    if (!text) return [el];
+    var work = el.cloneNode(true);
+    cleanInlineNoise(work);
+    var total = inlineWeight(work);
+    if (!total) return [el];
 
     var out = [];
-    var pos = 0;
+    var remaining = total;
     var guard = 0;
 
-    while (pos < text.length && guard++ < 500) {
-      var lo = pos + 1, hi = text.length, best = pos + 1;
+    while (remaining > 0 && guard++ < 10000) {
+      var lo = 1, hi = remaining, best = 1;
       while (lo <= hi) {
         var mid = (lo + hi) >> 1;
-        if (blockHeight(textSlice(el, text.slice(pos, mid)), content.w) <= content.h) {
+        var probe = emptyShell(el);
+        probe.appendChild(inlinePrefixFragment(work, mid));
+        if (blockHeight(probe, content.w) <= content.h) {
           best = mid; lo = mid + 1;
         } else {
           hi = mid - 1;
         }
       }
-      out.push(textSlice(el, text.slice(pos, best)));
-      pos = best;
+
+      var sh = emptyShell(el);
+      sh.appendChild(inlinePrefixFragment(work, best));
+      pruneInline(sh);
+      out.push(sh);
+
+      removeInlinePrefix(work, best);
+      pruneInline(work);
+      remaining -= best;
     }
-    return out;
+    return out.length ? out : [el];
   }
 
   function splitBlock(el, content) {

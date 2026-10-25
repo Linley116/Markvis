@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-261%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -36,7 +36,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 13,226 行：Swift 2,555 行、Web 内核 5,661 行、功能模块 2,442 行、测试 2,568 行。
+当前约 13,408 行：Swift 2,555 行、Web 内核 5,784 行、功能模块 2,442 行、测试 2,627 行。
 
 ### 功能
 
@@ -102,7 +102,7 @@ WebKit 自带的打印在这里不可用 —— 这是实测结论，不是猜�
 
 所以 Markvis 自己做分页：
 
-1. **JS 排版**：把块装进 A4 页框（794 × 1123 px → 595 × 842 pt）。高过一页的块（表格、代码、列表、引用）按行 / 按项拆段，同一块的续段绝不和它的前一段落在同一页。
+1. **JS 排版**：把块装进 A4 页框（794 × 1123 px → 595 × 842 pt）。高过一页的块按行 / 按项拆段：表格按行、代码按行、列表按项、引用和 HTML 容器按子块；普通段落用 DOM Range 按可见字符切分，粗体、链接、行内代码、图片和 `<br>` 跨页保留。
 2. **逐页捕获**：原生在独立离屏 `WKWebView` 里一页一页 `createPDF`，每次只截一个精确的页面矩形。
 3. **合并**：PDFKit 把每页缩放进 A4，写出最终文件。
 
@@ -186,7 +186,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 ### 测试
 
 ```bash
-node test/engine.test.js      # 130 项 —— 核心闭环
+node test/engine.test.js      # 133 项 —— 核心闭环
 node test/features.test.js    # 128 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
@@ -201,7 +201,6 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 - 表格单元格换行写成 `<br>`；Markdown 表格本身不支持单元格内段落。
 - 撤销是快照式的（每步存整篇 + 光标），所以能跨模式、跨重解析；代价是一步会还原整篇文档，超大文件上不如增量方案省。
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
-- 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
 - 块级 HTML 里的脚本不执行；PDF 会按顶层块元素拆分 HTML，但单个不可拆元素超过一页时仍可能被页底裁掉。
 - 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
 - 官方只提供源码，不提供预编译或已公证的二进制；`release.sh` 打出的 DMG 仅供维护者本机或内部使用。

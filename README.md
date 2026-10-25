@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-261%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -35,7 +35,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. Markvis does the
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The project is currently about 13,226 lines: 2,555 Swift, 5,661 web core, 2,442 features, and 2,568 tests.
+The project is currently about 13,408 lines: 2,555 Swift, 5,784 web core, 2,442 features, and 2,627 tests.
 
 ### Features
 
@@ -101,7 +101,7 @@ WebKit's own printing is unusable here — measured, not assumed:
 
 So Markvis paginates by itself:
 
-1. **Layout in JS.** Blocks are poured into A4 page boxes (794 × 1123 px → 595 × 842 pt). Blocks taller than a page (tables, code, lists, quotes) are split at row / line / item boundaries; a continuation chunk is never placed on the same page as its predecessor.
+1. **Layout in JS.** Blocks are poured into A4 page boxes (794 × 1123 px → 595 × 842 pt). Tall blocks split at row / line / item boundaries: tables by row, code by line, lists by item, quotes and HTML containers by child block. Ordinary paragraphs split by visible character with DOM Range, preserving bold, links, inline code, images and `<br>` across pages; a continuation chunk is never placed on the same page as its predecessor.
 2. **Capture per page.** Native renders one page at a time in a dedicated off-screen `WKWebView` and calls `createPDF` with an exact page rect.
 3. **Merge.** PDFKit scales each captured page into A4 and writes the final file.
 
@@ -185,7 +185,7 @@ MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alon
 ### Tests
 
 ```bash
-node test/engine.test.js      # 130 assertions — core loop
+node test/engine.test.js      # 133 assertions — core loop
 node test/features.test.js    # 128 assertions — features
 ./test/native.sh                                       # native Swift tests
 node test/bench.js                                     # performance baseline
@@ -200,7 +200,6 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 - Table-cell line breaks are written as `<br>`; Markdown tables still cannot hold multiple paragraphs in one cell.
 - Undo is snapshot-based (whole document + caret per step), which is why it survives mode switches and block re-parsing. The trade-off: a step restores the entire document rather than one node, so it is not cheap on very large files.
 - Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
-- Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
 - Scripts inside block-level HTML never run. PDF export splits HTML by top-level block elements, but a single unbreakable element taller than one page may still be clipped.
 - Custom themes are CSS only (no scripts), and PDF export always uses the light print palette — a dark theme does not turn the PDF black.
 - Source only: there are no prebuilt or notarized binaries. Any DMG produced by `release.sh` is for local or internal use by the maintainer.
