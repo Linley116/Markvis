@@ -162,6 +162,40 @@ const TABLE_MD = [
   check('层级正确', JSON.stringify(outline.levels) === '["1","2","3"]', JSON.stringify(outline.levels));
   check('标题文本正确', outline.texts[0] === '表格', outline.texts.join('|'));
 
+  const fold = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const twist = document.querySelector('.mf-outline-twist[data-idx="1"]');  // H2
+    const child = document.querySelector('.mf-outline-row[data-idx="2"]');     // H3
+    const before = child.getClientRects().length > 0;
+    twist.click();
+    await wait(80);
+    const collapsed = {
+      aria: twist.getAttribute('aria-expanded'),
+      childHidden: child.classList.contains('mf-hidden') && child.getClientRects().length === 0,
+      rowCollapsed: document.querySelector('.mf-outline-row[data-idx="1"]').classList.contains('mf-collapsed')
+    };
+    // 自动刷新重建后折叠状态仍要保留
+    window.MFOutline.refresh();
+    await wait(100);
+    const twist2 = document.querySelector('.mf-outline-twist[data-idx="1"]');
+    const child2 = document.querySelector('.mf-outline-row[data-idx="2"]');
+    const afterRefresh = child2.classList.contains('mf-hidden') && twist2.getAttribute('aria-expanded') === 'false';
+    twist2.click();
+    await wait(80);
+    return {
+      before,
+      collapsed,
+      afterRefresh,
+      expanded: child2.getClientRects().length > 0 && twist2.getAttribute('aria-expanded') === 'true',
+      twists: document.querySelectorAll('.mf-outline-twist:not(.mf-outline-spacer)').length
+    };
+  });
+  check('二级标题有折叠按钮并隐藏三级标题',
+        fold.before && fold.collapsed.childHidden && fold.collapsed.rowCollapsed &&
+        fold.collapsed.aria === 'false' && fold.twists === 2, JSON.stringify(fold));
+  check('重建后折叠状态保留', fold.afterRefresh === true, JSON.stringify(fold));
+  check('再次点击展开三级标题', fold.expanded === true, JSON.stringify(fold));
+
   const cursors = await page.evaluate(() => {
     const sidebar = document.getElementById('mf-sidebar');
     return {

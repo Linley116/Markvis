@@ -14,6 +14,8 @@
   var listEl = null;
   var timer = null;
   var built = false;
+  var collapsed = Object.create(null);   // cid -> true
+  var rows = [];                         // { idx, level, key, parent, children, el, item, twist }
 
   function pane() { return document.getElementById('mf-pane-outline'); }
 
@@ -34,20 +36,104 @@
 
     var heads = write.querySelectorAll('h1,h2,h3,h4,h5,h6');
     if (!heads.length) {
+      rows = [];
       listEl.innerHTML = '<div class="mf-outline-empty">还没有标题</div>';
       return;
     }
 
-    var html = '';
+    // 先按标题层级建父子关系；后代由「下一个同级或更高级标题」界定
+    rows = [];
+    var stack = [];
     for (var i = 0; i < heads.length; i++) {
       var h = heads[i];
       var level = parseInt(h.tagName.charAt(1), 10);
       var text = plainText(h).trim() || '(空标题)';
-      html += '<a class="mf-outline-item" data-idx="' + i + '" data-level="' + level + '"' +
-        ' style="padding-left:' + (10 + (level - 1) * 14) + 'px"' +
-        ' title="' + esc(text) + '">' + esc(text) + '</a>';
+      var cid = h.getAttribute('cid') || '';
+      var key = cid || ('h:' + level + ':' + text + ':' + i);
+
+      while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
+      var parent = stack.length ? stack[stack.length - 1] : null;
+      var row = {
+        idx: i,
+        level: level,
+        text: text,
+        key: key,
+        parent: parent,
+        children: [],
+        el: null,
+        item: null,
+        twist: null
+      };
+      if (parent) parent.children.push(row);
+      rows.push(row);
+      stack.push(row);
+    }
+
+    var liveKeys = Object.create(null);
+    var html = '';
+    for (var k = 0; k < rows.length; k++) {
+      var r = rows[k];
+      liveKeys[r.key] = true;
+      var pad = 2 + (r.level - 1) * 14;
+      html += '<div class="mf-outline-row" data-idx="' + r.idx + '" data-level="' + r.level + '"' +
+        ' style="padding-left:' + pad + 'px">';
+      if (r.children.length) {
+        html += '<button class="mf-outline-twist" type="button" data-idx="' + r.idx + '"' +
+          ' aria-expanded="' + (collapsed[r.key] ? 'false' : 'true') + '"' +
+          ' aria-label="折叠或展开" title="折叠 / 展开">' + CHEVRON + '</button>';
+      } else {
+        html += '<span class="mf-outline-twist mf-outline-spacer" aria-hidden="true"></span>';
+      }
+      html += '<a class="mf-outline-item" data-idx="' + r.idx + '" data-level="' + r.level + '"' +
+        ' tabindex="0" title="' + esc(r.text) + '">' + esc(r.text) + '</a></div>';
     }
     listEl.innerHTML = html;
+
+    // 清理已经不存在标题的折叠状态
+    Object.keys(collapsed).forEach(function (key) {
+      if (!liveKeys[key]) delete collapsed[key];
+    });
+
+    var els = listEl.querySelectorAll('.mf-outline-row');
+    for (var m = 0; m < rows.length; m++) {
+      rows[m].el = els[m];
+      rows[m].item = els[m].querySelector('.mf-outline-item');
+      rows[m].twist = els[m].querySelector('.mf-outline-twist');
+      rows[m].el.classList.toggle('mf-collapsed', !!collapsed[rows[m].key]);
+    }
+    applyVisibility();
+    markActive();
+  }
+
+  var CHEVRON = '<svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true">' +
+    '<path d="M2 3l3 4 3-4" fill="none" stroke="currentColor" stroke-width="1.3" ' +
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function isHidden(row) {
+    var p = row.parent;
+    while (p) {
+      if (collapsed[p.key]) return true;
+      p = p.parent;
+    }
+    return false;
+  }
+
+  function applyVisibility() {
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].el.classList.toggle('mf-hidden', isHidden(rows[i]));
+    }
+  }
+
+  function toggleRow(idx) {
+    var row = rows[idx];
+    if (!row || !row.children.length) return;
+    if (collapsed[row.key]) delete collapsed[row.key];
+    else collapsed[row.key] = true;
+    row.el.classList.toggle('mf-collapsed', !!collapsed[row.key]);
+    if (row.twist && row.twist.tagName === 'BUTTON') {
+      row.twist.setAttribute('aria-expanded', collapsed[row.key] ? 'false' : 'true');
+    }
+    applyVisibility();
     markActive();
   }
 
@@ -90,15 +176,18 @@
     }
     if (idx < 0 && heads.length) idx = 0;
 
-    var items = listEl ? listEl.querySelectorAll('.mf-outline-item') : [];
-    for (var j = 0; j < items.length; j++) {
-      items[j].classList.toggle('mf-active', j === idx);
+    // 当前节可能被折叠在祖先里：高亮最近的可见祖先
+    var active = idx >= 0 ? rows[idx] : null;
+    while (active && isHidden(active)) active = active.parent;
+
+    for (var j = 0; j < rows.length; j++) {
+      rows[j].item.classList.toggle('mf-active', rows[j] === active);
     }
-    if (idx >= 0 && items[idx] && typeof items[idx].scrollIntoView === 'function') {
+    if (active && active.item && typeof active.item.scrollIntoView === 'function') {
       var box = listEl.getBoundingClientRect();
-      var it = items[idx].getBoundingClientRect();
+      var it = active.item.getBoundingClientRect();
       if (it.top < box.top || it.bottom > box.bottom) {
-        items[idx].scrollIntoView({ block: 'nearest' });
+        active.item.scrollIntoView({ block: 'nearest' });
       }
     }
   }
@@ -133,8 +222,22 @@
   }, { passive: true });
 
   listEl.addEventListener('click', function (e) {
+    var twist = e.target.closest ? e.target.closest('.mf-outline-twist') : null;
+    if (twist && twist.tagName === 'BUTTON') {
+      e.preventDefault();
+      toggleRow(parseInt(twist.getAttribute('data-idx'), 10));
+      return;
+    }
     var item = e.target.closest ? e.target.closest('.mf-outline-item') : null;
     if (!item) return;
+    jump(parseInt(item.getAttribute('data-idx'), 10));
+  });
+
+  listEl.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var item = e.target.closest ? e.target.closest('.mf-outline-item') : null;
+    if (!item) return;
+    e.preventDefault();
     jump(parseInt(item.getAttribute('data-idx'), 10));
   });
 

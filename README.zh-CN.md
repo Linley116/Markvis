@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-261%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-264%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -36,7 +36,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 13,408 行：Swift 2,555 行、Web 内核 5,784 行、功能模块 2,442 行、测试 2,627 行。
+当前约 13,584 行：Swift 2,555 行、Web 内核 5,823 行、功能模块 2,545 行、测试 2,661 行。
 
 ### 功能
 
@@ -51,7 +51,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；重启恢复上次会话，重复打开同一文件只聚焦已有窗口 |
 | **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、Enter 单元格内换行（`<br>`）、CJK 内容友好的列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
-| **大纲 / 文件侧栏** | `Cmd+Shift+O` 开关左侧统一侧栏，`Cmd+Shift+E` 直达文件 tab；宽度记忆 |
+| **大纲 / 文件侧栏** | `Cmd+Shift+O` 开关左侧统一侧栏，`Cmd+Shift+E` 直达文件 tab；大纲按标题层级折叠，宽度记忆 |
 | **文件树** | 目录懒加载、当前文件高亮、外部改动自动刷新、新建/重命名/复制/删除、排序、树内拖拽、最近文件夹和上级目录；删除可撤销，移动重名自动改名 |
 | **快速打开** | `Cmd+Shift+P` 模糊搜索当前文件夹内的文档，键盘选择并打开 |
 | **输入补全** | 实时模式输入 `:smi` 补 emoji；源码模式围栏首行补代码语言名，支持 `py` / `js` / `ts` 等别名；↑↓/Enter/Tab/Esc 操作，插入可撤销 |
@@ -187,7 +187,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 
 ```bash
 node test/engine.test.js      # 133 项 —— 核心闭环
-node test/features.test.js    # 128 项 —— 功能
+node test/features.test.js    # 131 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容

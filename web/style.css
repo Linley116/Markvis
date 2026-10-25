@@ -788,19 +788,53 @@ body:not(.mf-sidebar-open) #mf-outline-btn:hover {
   padding: 4px 8px 24px;
 }
 
+.mf-outline-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  margin: 1px 0;
+  padding-right: 4px;
+  border-radius: 4px;
+}
+
+.mf-outline-row:hover { background: var(--code-bg); }
+.mf-outline-row.mf-hidden { display: none; }
+
+.mf-outline-twist {
+  flex: 0 0 16px;
+  width: 16px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+}
+
+.mf-outline-twist:not(.mf-outline-spacer):hover { color: var(--fg); }
+.mf-outline-twist svg { transition: transform .12s ease; }
+.mf-outline-row.mf-collapsed .mf-outline-twist svg { transform: rotate(-90deg); }
+.mf-outline-spacer { visibility: hidden; }
+
 .mf-outline-item {
   display: block;
-  padding: 4px 8px;
-  margin: 1px 0;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
   border-radius: 4px;
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--fg);
-  cursor: pointer;
+  cursor: default;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   border-left: 2px solid transparent;
+  outline: none;
 }
 
 .mf-outline-item:hover { background: var(--code-bg); }
@@ -810,6 +844,11 @@ body:not(.mf-sidebar-open) #mf-outline-btn:hover {
   border-left-color: var(--accent);
   background: var(--code-bg);
   font-weight: 500;
+}
+
+.mf-outline-item:focus-visible {
+  outline: 2px solid rgba(65, 131, 196, .35);
+  outline-offset: -2px;
 }
 
 .mf-outline-empty {
