@@ -206,7 +206,7 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the open bug list, the pending feature list, and the engineering notes behind the tricky parts. Distribution is source-only with no Apple notarization; incremental save is deferred after evaluation.
+See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the versioned fix log, deferred items, and the engineering notes behind the tricky parts. Distribution is source-only with no Apple notarization; incremental save is deferred and no longer scheduled.
 
 ### License
 
