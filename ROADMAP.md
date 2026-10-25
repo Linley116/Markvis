@@ -1,7 +1,7 @@
 # Markvis 路线图
 
-> **基线 v0.12.1** · 12,371 行（engine 3,582 / html2md 311 / css 1,410 / features 2,123 / Swift 2,521 / tests 2,424）
-> **241 项 JS 断言全绿**（引擎 121 + 功能 120）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.8 MB / DMG 1.7 MB
+> **基线 v0.13.0** · 12,811 行（engine 3,582 / html2md 311 / css 1,442 / features 2,442 / Swift 2,555 / tests 2,479）
+> **247 项 JS 断言全绿**（引擎 121 + 功能 126）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.8 MB / DMG 1.7 MB
 > **CI 已跑通**：GitHub Actions run 40065959796（原生 XCTest / 构建 / JS / PDF 全部 success）
 > 仓库：<https://github.com/Linley116/Markvis>
 
@@ -20,8 +20,9 @@
 | ✅ | **5** | 补齐体验差距 | `T1` 行内标记可编辑 · `F7` 脚注/TOC · `F7b` 定义式链接 · `F12` 拼写检查 · `T9` 菜单本地化 · `T11` 崩溃恢复 | 已完成 |
 | ✅ | **6** | 公式与图表 | `F5` KaTeX 数学 · `F6` Mermaid · `F5b` 源码浮层 · PDF 弱引用修复 | 已完成 |
 | ✅ | **7** | 主题与个性化 | `F17` 自定义主题包（`themes/*.css`）· 状态栏主题菜单 · 打开文件夹 / 重新加载 · `--mf-editor-width` 交给主题 | 已完成（`F14` 补全顺延到第 8 轮随手项） |
-| 🚧 | **8** | 结构与基础设施 | `T3` 撤销栈 · `T4` 嵌套块 · `F9` 文件树 · `F15` 增量落盘 | `T3` / `T4` / `F9` 已完成，`F15` 评估后暂缓 |
+| ✅ | **8** | 结构与基础设施 | `T3` 撤销栈 · `T4` 嵌套块 · `F9` 文件树 · `F15` 增量落盘 | `T3` / `T4` / `F9` 已完成；`F15` 评估后暂缓，不阻塞本轮 |
 | ✅ | **9** | 发布线 | CI（build + 三套测试）· `T8` 原生测试 · `F16` 分发 · `F11` 快速打开 | `F11` / CI / `T8` 已完成；`F16` 定为源码分发，不做公证 |
+| ✅ | **10** | 文件操作与输入体验 | `F9d` 删除撤销 / 移动重名自动改名 · `F14` emoji / 代码语言补全 | 已完成 |
 
 > 排期变更：第 3 轮原计划是 `F5`/`F6`/`T1`，实际先做了 PDF 重做与开源，这三项分别落到第 5、6 轮。
 
@@ -43,9 +44,9 @@
 | **F9b** | 文件树补 Typora 细节 | ~~v0.10.4 已对齐主体，还差：拖拽移动文件/文件夹（含与访达互拖）、排序切换（名称/修改时间 + 文件夹优先开关）、Duplicate、在新窗口打开、撤销文件操作、Recent Locations / 固定文件夹~~ **v0.10.7 已完成**（除「与访达互拖」拆到 `F9c`） | ~~P1~~ | ~~M~~ |
 | **F11** | 快速打开 | ~~`Cmd+P` 模糊搜文件名，需要文件索引（Typora 用 Web Worker + 自带 ripgrep）~~ **v0.10.8 已完成**：`Cmd+Shift+P`（`Cmd+P` 目前未绑定），原生 `library.allFiles` 遍历根，JS 子序列模糊匹配 + 分词边界加分 | ~~发布线~~ | ~~L~~ |
 | **F9c** | 文件树与访达互拖 | v0.10.7 只做了树内拖拽；从访达拖文件进侧栏、拖出侧栏到访达还没做 | P2 | M |
-| **F9d** | 撤销删除 / 移动冲突处理 | 删除进废纸篓不可撤销（和 Typora 一致）；同名目标现在直接拒绝，可考虑改名落地 | P2 | S |
+| **F9d** | 撤销删除 / 移动冲突处理 | ~~删除进废纸篓不可撤销；同名目标直接拒绝~~ **v0.13.0 已完成**：删除记录废纸篓目标，撤销时移回原位；移动重名自动落成 `name 2.md`，不再报错；移动/重命名的当前文档撤销后同步新路径。新增原生断言覆盖删除恢复、重名移动不覆盖、撤销回原位 | ~~P2~~ | ~~S~~ |
 | **F13** | HTML 块 | 内联编辑 + `iframe` 沙箱（Typora 用 `srcdoc` + 独立 partition） | P2 | M |
-| **F14** | emoji / 语言名补全 | 输入 `:` 补 emoji；围栏语言名补全 | 随时 | S |
+| **F14** | emoji / 语言名补全 | ~~输入 `:` 补 emoji；围栏语言名补全~~ **v0.13.0 已完成**：实时模式输入 `:smi` 弹 emoji 候选；源码模式围栏首行补语言名，支持 `py` / `js` / `ts` 等别名；↑↓/Enter/Tab/Esc 操作，插入走 `programEdit` 可撤销。独立 `features/autocomplete.js`，不改引擎解析 | ~~随时~~ | ~~S~~ |
 | **F15** | 增量落盘 | 复刻 `document.syncChangeIfNeeded` 的命令流协议，取代全量保存。**v0.10.8 评估后暂缓**：JS 要 diff 就得先序列化全篇（省不掉），原生仍是整文件写；bench 实测 2500 块序列化只在毫秒级，收益不抵写坏文件的风险 | P2 | M |
 | **F16** | 发布分发 | **决定不做公证分发**：README 引导从源码构建，官方不提供预编译二进制。`release.sh` 仅保留给维护者本机/内部打包，产物 ad-hoc 签名、未公证。原因：公证需付费 Developer ID，个人证书会把法定姓名和 Team ID 公开写进签名 | ~~发布线~~ | ~~M~~ |
 
@@ -87,6 +88,7 @@
 | v0.11.1 | 点左上角红色关闭按钮，最后一个窗口关掉后整个 app 直接退出；Typora 会留在后台，点 Dock 图标还能回来 | 根因是 `applicationShouldTerminateAfterLastWindowClosed` 直接返回 `true`，macOS 把「关最后一个窗口」当成退出。改为 `false`，并补全无窗口状态：①`applicationShouldHandleReopen` 点 Dock 时恢复最小化窗口或新建空白窗口；②`openFile` / `openFileInNewWindow` 在启动完成后不再只写 `pendingOpen`（原来没窗口时双击文件会静默丢失），当场建窗口加载；③无窗口时 `Cmd+O` 先建窗口再开面板。启动前的 `application(_:open:)` 仍走 pending 队列，不影响双击冷启动 |
 | v0.12.0 | 产品从 MarkFrame 改名为 Markvis，远程仓库同步改名 | 全量替换品牌：`Markvis.app` / 可执行文件 / `local.markvis.editor` / Application Support 目录 / 日志前缀 / 窗口与标签标识 / 测试模块 `MarkvisTests` / 环境变量 `MARKVIS_*` / README、路线图、CI 与仓库链接。新增 `LegacyMigration`：新 Bundle ID 首次启动时用 `CFPreferencesCopyMultiple` 从 `local.markframe.editor` 补齐最近文件、会话、文件树根目录等偏好（不覆盖新值），并把 `Application Support/MarkFrame` 的主题与恢复文件按缺失补齐到 `Markvis`；旧目录保留，不做破坏性移动。内部 `mf.*` 偏好键与 `mf-` CSS 前缀保持不变，避免无意义的全局重命名风险 |
 | v0.12.1 | 鼠标移到左侧导航栏时整片变成手形指针，与普通桌面编辑器不一致 | 侧栏统一 `cursor: default`，包括 tab、大纲项、文件行和底部按钮；只有文本输入保留 I-beam、右边缘拖宽保留 `col-resize`。样式限定在 `#mf-sidebar` 内，不影响正文链接、按钮和预览区。新增 2 项断言（侧栏与 tab/大纲均为 default、拖拽条仍为 col-resize） |
+| v0.13.0 | ①删除文件后无法撤销；移动遇到同名目标直接拒绝；②输入 emoji 只能手打、围栏语言名只能记拼写 | ①**F9d**：`libraryDelete` 记录 `delete{from,to}`，撤销时从废纸篓移回并重建父目录；重名移动走 `dedupeMoveName` 自动变成 `name 2.md`，目标文件不覆盖；移动/重命名撤销后若当前文档路径也变了，同步 `currentPath` 并通知 Web 层。②**F14**：新增 `features/autocomplete.js`——实时模式识别冒号 shortcode（避开 `10:30` / `http://`，支持中文后触发），源码模式识别围栏首行语言，维护 90 个 emoji 与语言别名；候选层支持 ↑↓/Enter/Tab/Esc 与鼠标，插入走 `MF.programEdit` 保留撤销；样式统一普通箭头，打印/导出时隐藏。新增 6 项功能断言和原生文件操作断言 |
 ---
 
 ## 五、已知限制（面向使用者）

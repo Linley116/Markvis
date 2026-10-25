@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
 [![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-241%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -37,7 +37,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 12,250 行：Swift 2,410 行、Web 内核 5,295 行、功能模块 2,123 行、测试 2,422 行。
+当前约 12,811 行：Swift 2,555 行、Web 内核 5,335 行、功能模块 2,442 行、测试 2,479 行。
 
 ### 功能
 
@@ -53,8 +53,9 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、CJK 内容友好的列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
 | **大纲 / 文件侧栏** | `Cmd+Shift+O` 开关左侧统一侧栏，`Cmd+Shift+E` 直达文件 tab；宽度记忆 |
-| **文件树** | 目录懒加载、当前文件高亮、外部改动自动刷新、新建/重命名/复制/删除、排序、树内拖拽、最近文件夹和上级目录 |
+| **文件树** | 目录懒加载、当前文件高亮、外部改动自动刷新、新建/重命名/复制/删除、排序、树内拖拽、最近文件夹和上级目录；删除可撤销，移动重名自动改名 |
 | **快速打开** | `Cmd+Shift+P` 模糊搜索当前文件夹内的文档，键盘选择并打开 |
+| **输入补全** | 实时模式输入 `:smi` 补 emoji；源码模式围栏首行补代码语言名，支持 `py` / `js` / `ts` 等别名；↑↓/Enter/Tab/Esc 操作，插入可撤销 |
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，以及自己放进主题文件夹的 CSS；状态栏主题菜单切换，`Cmd+Shift+L` 循环 |
 | **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，点一下弹出源码浮层直接改 |
@@ -185,7 +186,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 
 ```bash
 node test/engine.test.js      # 121 项 —— 核心闭环
-node test/features.test.js    # 120 项 —— 功能
+node test/features.test.js    # 126 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容

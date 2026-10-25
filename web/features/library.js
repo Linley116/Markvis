@@ -890,7 +890,7 @@
       state.current = path || '';
       openFile(path);
     },
-    /** 撤销上一次文件操作（新建/复制/重命名/移动） */
+    /** 撤销上一次文件操作（新建/复制/重命名/移动/删除） */
     undoFileOp: function () {
       bridge.callHandler('library.undoFileOp', null, function (res) {
         if (res && res.error) { window.alert(res.error); return; }

@@ -980,6 +980,61 @@ const TABLE_MD = [
         JSON.stringify([qo.openCall, qo.hidden]));
   check('Esc 关闭面板', qo.escClosed === true);
 
+  console.log('\n[16] F14 emoji / 代码语言补全');
+  await page.evaluate(() => {
+    if (window.MF.isSourceMode()) window.__cmd('toggleSource');
+    window.__loadContent('', '# T\n\nhello world', 't.md');
+  });
+  await page.waitForTimeout(180);
+  await page.evaluate(() => {
+    const p = document.querySelector('#write p[mdtype="paragraph"]');
+    p.focus();
+    window.MF.setCaretBySourceOffset(p, 6);
+  });
+  await page.keyboard.type(':smile', { delay: 8 });
+  await page.waitForTimeout(120);
+  const acEmoji = await page.evaluate(() => ({
+    open: !!document.getElementById('mf-autocomplete'),
+    items: Array.from(document.querySelectorAll('#mf-autocomplete .mf-ac-item')).map(i => i.textContent),
+    active: document.querySelector('#mf-autocomplete .mf-ac-item.mf-active')?.textContent || ''
+  }));
+  check('emoji 候选出现并默认选中 smile',
+        acEmoji.open && /:smile:/.test(acEmoji.active), JSON.stringify(acEmoji));
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(120);
+  const emojiMd = await page.evaluate(() => window.__getMarkdown());
+  check('Enter 插入 emoji 并替换 shortcode',
+        emojiMd.indexOf('😄') >= 0 && emojiMd.indexOf(':smile') < 0, JSON.stringify(emojiMd));
+  const emojiClosed = await page.evaluate(() => !document.getElementById('mf-autocomplete'));
+  check('选中后关闭候选层', emojiClosed);
+  await page.evaluate(() => window.__cmd('undo'));
+  await page.waitForTimeout(100);
+  const emojiUndo = await page.evaluate(() => window.__getMarkdown());
+  check('emoji 插入可撤销', emojiUndo.indexOf(':smile') >= 0, JSON.stringify(emojiUndo));
+
+  const lang = await page.evaluate(async () => {
+    if (!window.MF.isSourceMode()) window.__cmd('toggleSource');
+    const s = document.getElementById('source');
+    s.value = '```pyt\nprint(1)\n```';
+    s.focus();
+    s.selectionStart = s.selectionEnd = 6;
+    s.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 100));
+    return {
+      open: !!document.getElementById('mf-autocomplete'),
+      items: Array.from(document.querySelectorAll('#mf-autocomplete .mf-ac-item')).map(i => i.textContent),
+      mode: window.MF.isSourceMode(),
+      display: getComputedStyle(s).display,
+      value: s.value,
+      sel: [s.selectionStart, s.selectionEnd]
+    };
+  });
+  check('围栏语言名补全出现 python', lang.open && lang.items.some(t => /python/.test(t)), JSON.stringify(lang));
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(100);
+  const langValue = await page.evaluate(() => document.getElementById('source').value);
+  check('选择语言后只替换语言名', langValue === '```python\nprint(1)\n```', JSON.stringify(langValue));
+
   console.log('\n[11] 运行时错误');
   check('无未捕获异常', errors.length === 0, errors.join(' | '));
 

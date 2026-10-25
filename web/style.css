@@ -1288,7 +1288,8 @@ body.mf-export #status,
 body.mf-export #mf-sidebar,
 body.mf-export #mf-outline-btn,
 body.mf-export #mf-theme-menu,
-body.mf-export #mf-search {
+body.mf-export #mf-search,
+body.mf-export #mf-autocomplete {
   display: none !important;
 }
 
@@ -1352,6 +1353,37 @@ body.mf-export h1 { font-size: 1.95em; }
 body.mf-export h2 { font-size: 1.45em; }
 body.mf-export h3 { font-size: 1.2em; }
 
+/* ---------- F14：emoji / 代码语言补全 ---------- */
+
+#mf-autocomplete {
+  position: fixed;
+  z-index: 80;
+  min-width: 190px;
+  max-width: 280px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+  font-size: 12px;
+  user-select: none;
+}
+
+.mf-ac-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 5px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.mf-ac-item.mf-active { background: var(--code-bg); color: var(--fg); }
+.mf-ac-emoji { width: 18px; text-align: center; font-size: 15px; line-height: 1; }
+.mf-ac-label { font-family: var(--mf-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.mf-ac-detail { margin-left: auto; color: var(--muted); font-size: 11px; }
+
 @media print {
   /* 打印一律浅色，避免深色主题打出黑底 */
   :root,
@@ -1372,7 +1404,7 @@ body.mf-export h3 { font-size: 1.2em; }
     overflow: visible !important;
   }
 
-  #status, #mf-sidebar, #mf-outline-btn, #mf-theme-menu, #mf-search { display: none !important; }
+  #status, #mf-sidebar, #mf-outline-btn, #mf-theme-menu, #mf-search, #mf-autocomplete { display: none !important; }
   body.mf-sidebar-open #scroll { margin-left: 0 !important; }
   #scroll { height: auto !important; overflow: visible !important; }
   #write { max-width: none !important; padding: 0 !important; }

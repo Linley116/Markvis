@@ -100,6 +100,31 @@ func nativeScenarioLibraryLifecycle() throws {
         try nativeExpect(wc.libraryCreate(in: "", name: "tempdir", kind: "dir", root: root.path)["ok"] as? Bool == true, "准备撤销新建目录")
         try nativeExpect(wc.libraryUndoFileOp()["ok"] as? Bool == true, "撤销新建目录")
         try nativeExpect(!FileManager.default.fileExists(atPath: path("tempdir")), "撤销新建目录还原")
+
+        // F9d：目标重名时自动改名，而不是拒绝
+        let fm = FileManager.default
+        try fm.createDirectory(at: root.appendingPathComponent("dest"), withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: root.appendingPathComponent("clash.md"))
+        try Data("target".utf8).write(to: root.appendingPathComponent("dest/clash.md"))
+        let conflict = wc.libraryMove(path: path("clash.md"), toDir: path("dest"), root: root.path)
+        try nativeExpect(conflict["ok"] as? Bool == true, "重名移动不拒绝")
+        try nativeExpect(conflict["path"] as? String == path("dest/clash 2.md"), "重名移动自动改名")
+        let movedBody = try String(contentsOfFile: path("dest/clash 2.md"), encoding: .utf8)
+        let targetBody = try String(contentsOfFile: path("dest/clash.md"), encoding: .utf8)
+        try nativeExpect(movedBody == "source", "源文件内容随移动保留")
+        try nativeExpect(targetBody == "target", "不覆盖目标文件")
+        try nativeExpect(wc.libraryUndoFileOp()["ok"] as? Bool == true, "撤销重名移动")
+        try nativeExpect(fm.fileExists(atPath: path("clash.md")), "重名移动撤销回原位")
+
+        // F9d：删除进废纸篓后可以撤销恢复
+        let trashName = "markvis-trash-\(UUID().uuidString.prefix(8)).md"
+        try Data("recover me".utf8).write(to: root.appendingPathComponent(trashName))
+        let deleted = wc.libraryDelete(path: path(trashName), root: root.path)
+        try nativeExpect(deleted["ok"] as? Bool == true, "删除进废纸篓")
+        try nativeExpect(!fm.fileExists(atPath: path(trashName)), "删除后原位置消失")
+        try nativeExpect(wc.libraryUndoFileOp()["ok"] as? Bool == true, "撤销删除")
+        let restoredBody = try String(contentsOfFile: path(trashName), encoding: .utf8)
+        try nativeExpect(restoredBody == "recover me", "从废纸篓恢复原文件")
     }
 }
 

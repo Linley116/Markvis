@@ -671,7 +671,7 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
-    /// 删除进废纸篓（不直接抹掉）
+    /// 删除进废纸篓（不直接抹掉），并记录一步可撤销操作。
     func libraryDelete(path raw: String, root: String? = nil) -> [String: Any] {
         let root = root ?? effectiveLibraryRoot()
         guard let url = safeEntryURL(raw, root: root) else { return ["error": "bad path"] }
@@ -679,19 +679,20 @@ final class EditorWindowController: NSWindowController {
         let fm = FileManager.default
         let trash = fm.urls(for: .trashDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
+        let base = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
         var target = trash.appendingPathComponent(url.lastPathComponent)
         var n = 1
         while fm.fileExists(atPath: target.path) {
-            let base = url.deletingPathExtension().lastPathComponent
-            target = trash.appendingPathComponent("\(base).\(n).\(url.pathExtension)")
+            let name = ext.isEmpty ? "\(base).\(n)" : "\(base).\(n).\(ext)"
+            target = trash.appendingPathComponent(name)
             n += 1
         }
         markSelfWrite(url.path, target.path)
         do {
             try fm.moveItem(at: url, to: target)
-            // 进废纸篓的操作不记入可撤销栈（和 Typora 一致：只有 move/rename/create 可撤）
-            lastFileOp = nil
-            return ["ok": true]
+            recordFileOp(kind: "delete", from: url.path, to: target.path)
+            return ["ok": true, "path": target.path]
         } catch {
             return ["error": "\(error)"]
         }
@@ -728,7 +729,8 @@ final class EditorWindowController: NSWindowController {
         return candidate
     }
 
-    /// 移动到另一个目录（树内拖拽的目标）。不能移进自己的子孙目录，不能覆盖。
+    /// 移动到另一个目录（树内拖拽的目标）。不能移进自己的子孙目录；
+    /// 目标重名时自动改成「name 2.md」，而不是直接拒绝。
     func libraryMove(path raw: String, toDir rawTo: String, root: String? = nil) -> [String: Any] {
         let root = root ?? effectiveLibraryRoot()
         guard let url = safeEntryURL(raw, root: root),
@@ -739,9 +741,11 @@ final class EditorWindowController: NSWindowController {
         if destPath.hasPrefix(srcPath + "/") { return ["error": "不能移动到自己的子目录"] }
         if srcPath == destPath { return ["error": "已经在目标目录"] }
 
-        let target = destDir.appendingPathComponent(url.lastPathComponent).standardizedFileURL
-        guard !FileManager.default.fileExists(atPath: target.path) else {
-            return ["error": "目标目录已有同名项"]
+        var target = destDir.appendingPathComponent(url.lastPathComponent).standardizedFileURL
+        if target.path == srcPath { return ["error": "已经在目标目录"] }
+        if FileManager.default.fileExists(atPath: target.path) {
+            target = destDir.appendingPathComponent(
+                Self.dedupeMoveName(url.lastPathComponent, in: destDir)).standardizedFileURL
         }
         markSelfWrite(url.path, target.path)
         do {
@@ -755,6 +759,20 @@ final class EditorWindowController: NSWindowController {
         } catch {
             return ["error": "\(error)"]
         }
+    }
+
+    /// 移动遇到重名：name 2.md / name 3.md …（区别于 Duplicate 的 name copy）
+    static func dedupeMoveName(_ name: String, in dir: URL) -> String {
+        let fm = FileManager.default
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var n = 2
+        var candidate = ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)"
+        while fm.fileExists(atPath: dir.appendingPathComponent(candidate).path) {
+            n += 1
+            candidate = ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)"
+        }
+        return candidate
     }
 
     // MARK: 文件操作撤销（Typora：only the last one file operation is undoable）
@@ -775,12 +793,28 @@ final class EditorWindowController: NSWindowController {
             // 新建/复制 → 撤销就是删掉
             if fm.fileExists(atPath: op.to) { try? fm.removeItem(at: URL(fileURLWithPath: op.to)) }
             return ["ok": true, "path": op.to]
+        case "delete":
+            // 删除进废纸篓 → 从废纸篓移回原位置
+            guard fm.fileExists(atPath: op.to) else { return ["error": "废纸篓里已找不到这一项"] }
+            guard !fm.fileExists(atPath: op.from) else { return ["error": "原位置已有同名项"] }
+            let dir = (op.from as NSString).deletingLastPathComponent
+            try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            do {
+                try fm.moveItem(at: URL(fileURLWithPath: op.to), to: URL(fileURLWithPath: op.from))
+                return ["ok": true, "path": op.from]
+            } catch {
+                return ["error": "\(error)"]
+            }
         case "rename", "move":
             guard fm.fileExists(atPath: op.to) else { return ["error": "目标已不存在"] }
             let dir = (op.from as NSString).deletingLastPathComponent
             try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
             do {
                 try fm.moveItem(at: URL(fileURLWithPath: op.to), to: URL(fileURLWithPath: op.from))
+                if currentPath == op.to {
+                    currentPath = op.from
+                    runJS("window.MFLibrary && window.MFLibrary.documentMoved(\(jsStringLiteral(op.from)))")
+                }
                 return ["ok": true, "path": op.from]
             } catch {
                 return ["error": "\(error)"]

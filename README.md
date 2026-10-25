@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
 [![CI](https://github.com/Linley116/Markvis/actions/workflows/ci.yml/badge.svg)](https://github.com/Linley116/Markvis/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-241%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -36,7 +36,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. Markvis does the
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The project is currently about 12,250 lines: 2,410 Swift, 5,295 web core, 2,123 features, and 2,422 tests.
+The project is currently about 12,811 lines: 2,555 Swift, 5,335 web core, 2,442 features, and 2,479 tests.
 
 ### Features
 
@@ -52,8 +52,9 @@ The project is currently about 12,250 lines: 2,410 Swift, 5,295 web core, 2,123 
 | **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-friendly column widths |
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
 | **Outline / file sidebar** | `Cmd+Shift+O` toggles the unified left sidebar; `Cmd+Shift+E` opens its Files tab; width is remembered |
-| **File tree** | Lazy loading, current-file highlighting, automatic external-change refresh, create/rename/duplicate/delete, sorting, in-tree drag, recent folders, and parent-directory navigation |
+| **File tree** | Lazy loading, current-file highlighting, automatic external-change refresh, create/rename/duplicate/delete, sorting, in-tree drag, recent folders, and parent-directory navigation; deletes are undoable and name collisions on move are auto-renamed |
 | **Quick Open** | `Cmd+Shift+P` fuzzy-searches documents under the current folder and opens the keyboard-selected result |
+| **Input completion** | Type `:smi` in live mode to complete emoji; complete fenced-code language names in source mode, with aliases such as `py` / `js` / `ts`; ↑↓/Enter/Tab/Esc, undoable insertion |
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord plus your own CSS files, switched from the status-bar theme menu (`Cmd+Shift+L` cycles) |
 | **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |
@@ -184,7 +185,7 @@ MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alon
 
 ```bash
 node test/engine.test.js      # 121 assertions — core loop
-node test/features.test.js    # 120 assertions — features
+node test/features.test.js    # 126 assertions — features
 ./test/native.sh                                       # native Swift tests
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
