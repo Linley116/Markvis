@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-256%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -36,7 +36,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 13,131 行：Swift 2,555 行、Web 内核 5,593 行、功能模块 2,442 行、测试 2,541 行。
+当前约 13,226 行：Swift 2,555 行、Web 内核 5,661 行、功能模块 2,442 行、测试 2,568 行。
 
 ### 功能
 
@@ -49,7 +49,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | **`expand`** | 光标移进 `**粗体**`，标记浮出来 —— 而且可编辑：能删掉一个 `*`、能用方向键穿过去、能在中间插字 |
 | **源码模式** | `Cmd+/` 在渲染视图和原文之间双向切换 |
 | **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；重启恢复上次会话，重复打开同一文件只聚焦已有窗口 |
-| **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、CJK 内容友好的列宽 |
+| **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、Enter 单元格内换行（`<br>`）、CJK 内容友好的列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
 | **大纲 / 文件侧栏** | `Cmd+Shift+O` 开关左侧统一侧栏，`Cmd+Shift+E` 直达文件 tab；宽度记忆 |
 | **文件树** | 目录懒加载、当前文件高亮、外部改动自动刷新、新建/重命名/复制/删除、排序、树内拖拽、最近文件夹和上级目录；删除可撤销，移动重名自动改名 |
@@ -171,6 +171,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 | 新建 / 新标签页 / 打开 / 保存 | `Cmd+N` / `Cmd+T` / `Cmd+O` / `Cmd+S` |
 | 拼写检查开关 | `Cmd+;` |
 | 硬换行 | `Shift+Enter`（或行尾两个空格 / `\`，GFM 语法） |
+| 表格单元格内换行 | `Enter` / `Shift+Enter`（写成 `<br>`，不破坏表格） |
 | 导出 PDF / HTML | File → Export |
 | 粗体 / 斜体 / 行内代码 | `Cmd+B` / `Cmd+I` / `Cmd+K` |
 | 切换源码模式 | `Cmd+/` |
@@ -186,7 +187,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 
 ```bash
 node test/engine.test.js      # 130 项 —— 核心闭环
-node test/features.test.js    # 126 项 —— 功能
+node test/features.test.js    # 128 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
 ./test/pdf-regression.sh                               # PDF 结构 + 内容
@@ -197,11 +198,11 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 ### 已知限制
 
 - 嵌套块已经支持（列表嵌列表、条目里放代码块/引用、引用里多段）。表格仍不能嵌套；块级 HTML 在 sandbox iframe 里渲染，脚本被禁用，编辑走右上角 `</>` 源码浮层。
-- 表格单元格里不能有真正的换行。
+- 表格单元格换行写成 `<br>`；Markdown 表格本身不支持单元格内段落。
 - 撤销是快照式的（每步存整篇 + 光标），所以能跨模式、跨重解析；代价是一步会还原整篇文档，超大文件上不如增量方案省。
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
 - 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
-- 块级 HTML 里的脚本不执行；单个 HTML 块超过一页时 PDF 不拆分，可能被页底裁掉。
+- 块级 HTML 里的脚本不执行；PDF 会按顶层块元素拆分 HTML，但单个不可拆元素超过一页时仍可能被页底裁掉。
 - 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
 - 官方只提供源码，不提供预编译或已公证的二进制；`release.sh` 打出的 DMG 仅供维护者本机或内部使用。
 

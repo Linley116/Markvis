@@ -956,10 +956,10 @@ function check(name, cond, extra) {
         ? frame.contentDocument.body.textContent.trim() : '',
       pwned: !!window.__htmlPwned,
       md: window.__getMarkdown(),
-      exportHasRaw: exportHTML.indexOf('<section><em>Changed</em></section>') >= 0,
+      exportHasRaw: /<section[^>]*><em>Changed<\/em><\/section>/.test(exportHTML),
       exportHasIframe: /<iframe/i.test(exportHTML),
       exportHasScript: /<script/i.test(exportHTML),
-      printHasRaw: printed.pages.join('').indexOf('<section><em>Changed</em></section>') >= 0,
+      printHasRaw: /<section[^>]*><em>Changed<\/em><\/section>/.test(printed.pages.join('')),
       printHasIframe: /<iframe/i.test(printed.pages.join(''))
     };
   });

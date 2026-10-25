@@ -126,6 +126,17 @@
     while (i < src.length) {
       var c = src[i];
 
+      // 行内 <br>：GFM 表格不能有真实换行，单元格用 <br> 表达换行
+      if (c === '<') {
+        var mBr = /^<br\s*\/?>/i.exec(src.slice(i));
+        if (mBr) {
+          flush();
+          out.push({ type: 'break', hard: true, mark: '<br>' });
+          i += mBr[0].length;
+          continue;
+        }
+      }
+
       // 行内公式 $...$（$ 后面不能是空白，收盘 $ 前也不能是空白）
       if (c === '$' && src[i + 1] && src[i + 1] !== '$' && /\S/.test(src[i + 1])) {
         var mathEnd = -1;
@@ -1405,7 +1416,8 @@
 
   /** BR 在源码里的长度：标记 + 换行符本身 */
   function brSourceLen(el) {
-    return brMark(el).length + 1;
+    var mark = brMark(el);
+    return mark === '<br>' ? mark.length : mark.length + 1;
   }
 
   function inlineRaw(el) {
@@ -1420,7 +1432,10 @@
       if (n.nodeType !== 1) continue;
 
       if (n.tagName === 'BR') {
-        if (!isPad(n)) out += brMark(n) + '\n';
+        if (!isPad(n)) {
+          var mark = brMark(n);
+          out += mark === '<br>' ? mark : mark + '\n';
+        }
         continue;
       }
 
@@ -2543,6 +2558,35 @@
     setCaretBySourceOffset(target, inlineRaw(target).length);
     });
   }
+
+  /** 表格单元格内换行：插入带 data-mark="<br>" 的换行，序列化仍是一行合法表格 */
+  function insertCellBreak() {
+    programEdit(function () {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      var range = sel.getRangeAt(0);
+      if (!range.collapsed) range.deleteContents();
+
+      var br = document.createElement('br');
+      br.className = 'md-hardbreak';
+      br.setAttribute('data-mark', '<br>');
+      range.insertNode(br);
+
+      // BR 后面需要一个可放光标的文本节点
+      var anchor = document.createTextNode('\u200b');
+      br.parentNode.insertBefore(anchor, br.nextSibling);
+
+      var r = document.createRange();
+      r.setStart(anchor, 1);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+
+      markDirtyFromCaret();
+      setEdited(true);
+    });
+  }
+
   // ------------------------------------------------------------------
   // 自动配对：括号与引号（代码块内与 IME 组合态不启用）
   // ------------------------------------------------------------------
@@ -2649,14 +2693,15 @@
     var sel = window.getSelection();
     var cell = sel && sel.anchorNode ? closestCell(sel.anchorNode) : null;
 
-    // 表格内：Tab 走单元格，Enter 不拆块
+    // 表格内：Tab 走单元格，Enter / Shift+Enter 在单元格里换行（写 <br>）
     if (cell && e.key === 'Tab') {
       e.preventDefault();
       moveCell(cell, e.shiftKey ? -1 : 1);
       return;
     }
-    if (cell && e.key === 'Enter') {
+    if (cell && e.key === 'Enter' && !e.isComposing) {
       e.preventDefault();
+      insertCellBreak();
       return;
     }
 
@@ -3340,6 +3385,10 @@
     if (tag === 'PRE' || el.getAttribute('mdtype') === 'fences') return splitPre(el, content);
     if (tag === 'UL' || tag === 'OL') return splitList(el, content);
     if (tag === 'BLOCKQUOTE') return splitByChildren(el, content);
+    if (el.classList && el.classList.contains('md-html-print') && el.children.length &&
+        /^(DIV|SECTION|ARTICLE|MAIN|ASIDE|HEADER|FOOTER|FIGURE|DETAILS|FORM)$/.test(tag)) {
+      return splitByChildren(el, content);
+    }
     return splitPlainText(el, content);
   }
 
@@ -3442,9 +3491,28 @@
   }
 
   function printableHTMLBlock(source) {
+    var html = sanitizedHTML(source.getAttribute('data-html') || '');
+    var tpl = document.createElement('template');
+    tpl.innerHTML = html;
+
+    // 只有一个顶层元素时直接沿用它，PDF 才能按它的子块拆页；
+    // 多个顶层节点仍包一层容器。
+    var nodes = Array.prototype.slice.call(tpl.content.childNodes).filter(function (n) {
+      return n.nodeType === 1 || (n.nodeType === 3 && n.nodeValue.trim());
+    });
+    if (nodes.length === 1 && nodes[0].nodeType === 1) {
+      var root = nodes[0].cloneNode(true);
+      var tag = root.tagName;
+      if (tag !== 'HTML' && tag !== 'BODY' && tag !== 'STYLE' && tag !== 'LINK' &&
+          tag !== 'META' && tag !== 'TITLE') {
+        root.classList.add('md-html-print');
+        return root;
+      }
+    }
+
     var box = document.createElement('div');
     box.className = 'md-block md-html-print';
-    box.innerHTML = sanitizedHTML(source.getAttribute('data-html') || '');
+    box.innerHTML = html;
     return box;
   }
 

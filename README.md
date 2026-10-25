@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-256%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -35,7 +35,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. Markvis does the
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The project is currently about 13,131 lines: 2,555 Swift, 5,593 web core, 2,442 features, and 2,541 tests.
+The project is currently about 13,226 lines: 2,555 Swift, 5,661 web core, 2,442 features, and 2,568 tests.
 
 ### Features
 
@@ -48,7 +48,7 @@ The project is currently about 13,131 lines: 2,555 Swift, 5,593 web core, 2,442 
 | **`expand`** | Move the caret into `**bold**`, the markers float back into view — and they are editable: delete one `*`, arrow through them, type between them |
 | **Source mode** | `Cmd+/` round-trips between rendered and raw text |
 | **Multi-document** | One document per window, native macOS tab groups (`Cmd+T`), session restoration, and focusing an existing window instead of reopening the same file |
-| **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, CJK-friendly column widths |
+| **Tables** | Tab / Shift-Tab cell navigation, auto row on last cell, Enter for a cell line break (`<br>`), CJK-friendly column widths |
 | **Find & replace** | `Cmd+F`, uses the CSS Custom Highlight API — it never mutates the document |
 | **Outline / file sidebar** | `Cmd+Shift+O` toggles the unified left sidebar; `Cmd+Shift+E` opens its Files tab; width is remembered |
 | **File tree** | Lazy loading, current-file highlighting, automatic external-change refresh, create/rename/duplicate/delete, sorting, in-tree drag, recent folders, and parent-directory navigation; deletes are undoable and name collisions on move are auto-renamed |
@@ -170,6 +170,7 @@ MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alon
 | New / New tab / Open / Save | `Cmd+N` / `Cmd+T` / `Cmd+O` / `Cmd+S` |
 | Toggle spellcheck | `Cmd+;` |
 | Hard line break | `Shift+Enter` (or two trailing spaces / `\`, per GFM) |
+| Line break inside a table cell | `Enter` / `Shift+Enter` (writes `<br>` without breaking the table) |
 | Export PDF / HTML | File → Export |
 | Bold / Italic / Inline code | `Cmd+B` / `Cmd+I` / `Cmd+K` |
 | Toggle source mode | `Cmd+/` |
@@ -185,7 +186,7 @@ MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alon
 
 ```bash
 node test/engine.test.js      # 130 assertions — core loop
-node test/features.test.js    # 126 assertions — features
+node test/features.test.js    # 128 assertions — features
 ./test/native.sh                                       # native Swift tests
 node test/bench.js                                     # performance baseline
 ./test/pdf-regression.sh                               # PDF structure + content
@@ -196,11 +197,11 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 ### Known limitations
 
 - Nested blocks work (lists in lists, code blocks and quotes inside items, multi-paragraph quotes). Tables still cannot be nested. Block-level HTML renders in a sandboxed iframe with scripts disabled; edit it through the `</>` source overlay.
-- Table cells cannot contain a real line break.
+- Table-cell line breaks are written as `<br>`; Markdown tables still cannot hold multiple paragraphs in one cell.
 - Undo is snapshot-based (whole document + caret per step), which is why it survives mode switches and block re-parsing. The trade-off: a step restores the entire document rather than one node, so it is not cheap on very large files.
 - Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
 - Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
-- Scripts inside block-level HTML never run. A single HTML block taller than one page is not split in PDF export and may be clipped at the page bottom.
+- Scripts inside block-level HTML never run. PDF export splits HTML by top-level block elements, but a single unbreakable element taller than one page may still be clipped.
 - Custom themes are CSS only (no scripts), and PDF export always uses the light print palette — a dark theme does not turn the PDF black.
 - Source only: there are no prebuilt or notarized binaries. Any DMG produced by `release.sh` is for local or internal use by the maintainer.
 

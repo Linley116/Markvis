@@ -1,7 +1,7 @@
 # Markvis 路线图
 
-> **基线 v0.14.0** · 13,131 行（engine 3,792 / html2md 311 / css 1,490 / features 2,442 / Swift 2,555 / tests 2,541）
-> **256 项 JS 断言全绿**（引擎 130 + 功能 126）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.9 MB / DMG 1.7 MB
+> **基线 v0.14.1** · 13,226 行（engine 3,860 / html2md 311 / css 1,490 / features 2,442 / Swift 2,555 / tests 2,568）
+> **258 项 JS 断言全绿**（引擎 130 + 功能 128）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.9 MB / DMG 1.7 MB
 > **CI 为手动触发**：日常 push / PR 不自动跑；需要完整验证时在 Actions → CI → Run workflow。上次 run 40065959796（原生 XCTest / 构建 / JS / PDF）全部 success。
 > 仓库：<https://github.com/Linley116/Markvis>
 
@@ -24,6 +24,7 @@
 | ✅ | **9** | 发布线 | CI（build + 三套测试）· `T8` 原生测试 · `F16` 分发 · `F11` 快速打开 | `F11` / CI / `T8` 已完成；`F16` 定为源码分发，不做公证 |
 | ✅ | **10** | 文件操作与输入体验 | `F9d` 删除撤销 / 移动重名自动改名 · `F14` emoji / 代码语言补全 | 已完成 |
 | ✅ | **11** | 块级 HTML | `F13` sandbox iframe 预览 · 源码浮层编辑 · 导出/打印展开 | 已完成 |
+| ✅ | **12** | 已知限制收敛 | 表格单元格 `<br>` 换行 · HTML 块按顶层块拆页 | 已完成 |
 
 > 排期变更：第 3 轮原计划是 `F5`/`F6`/`T1`，实际先做了 PDF 重做与开源，这三项分别落到第 5、6 轮。
 
@@ -91,14 +92,15 @@
 | v0.12.1 | 鼠标移到左侧导航栏时整片变成手形指针，与普通桌面编辑器不一致 | 侧栏统一 `cursor: default`，包括 tab、大纲项、文件行和底部按钮；只有文本输入保留 I-beam、右边缘拖宽保留 `col-resize`。样式限定在 `#mf-sidebar` 内，不影响正文链接、按钮和预览区。新增 2 项断言（侧栏与 tab/大纲均为 default、拖拽条仍为 col-resize） |
 | v0.13.0 | ①删除文件后无法撤销；移动遇到同名目标直接拒绝；<br>②输入 emoji 只能手打、围栏语言名只能记拼写 | ①**F9d**：`libraryDelete` 记录 `delete{from,to}`，撤销时从废纸篓移回并重建父目录；重名移动走 `dedupeMoveName` 自动变成 `name 2.md`，目标文件不覆盖；移动/重命名撤销后若当前文档路径也变了，同步 `currentPath` 并通知 Web 层。<br>②**F14**：新增 `features/autocomplete.js`——实时模式识别冒号 shortcode（避开 `10:30` / `http://`，支持中文后触发），源码模式识别围栏首行语言，维护 90 个 emoji 与语言别名；候选层支持 ↑↓/Enter/Tab/Esc 与鼠标，插入走 `MF.programEdit` 保留撤销；样式统一普通箭头，打印/导出时隐藏。新增 6 项功能断言和原生文件操作断言 |
 | v0.14.0 | 块级 HTML 只能当普通文本看，无法安全渲染，也没法在编辑器里改 | **F13**：解析 CommonMark 块级标签与注释/script/style/pre；每块用 `sandbox="allow-same-origin"`（不含 `allow-scripts`）的 `srcdoc` iframe 渲染，按内容自动测高、主题字体同步、相对图片按文档目录补 `base`；右上角 `</>` 复用源码浮层编辑，保存后刷新预览；`data-html` 原样序列化，保证 Markdown 往返。导出/打印时把 iframe 展开为普通 DOM，并移除 script/iframe/object/embed/base/meta-refresh 与 `on*`、`javascript:`；独立 HTML 导出和 PDF 分页都走这条路径。新增 9 项断言覆盖解析、sandbox、编辑、序列化、导出与分页 |
+| v0.14.1 | 表格单元格里 Enter 被直接拦掉，无法换行；HTML 块超过一页只能整块塞进 PDF | ①**表格换行**：解析 `<br>` 为 hard break，单元格内 Enter / Shift+Enter 插入 `data-mark="<br>"`；序列化不产生真实换行，表格结构不变。<br>②**HTML 分页**：导出时若 HTML 只有一个顶层元素就沿用它（保留 class/样式），多个顶层节点包容器；`splitBlock` 对 `md-html-print` 容器按子块拆页，表格仍走按行拆。单个不可拆元素超过一页时仍可能裁切。新增 2 项功能断言 |
 
 ---
 
 ## 五、已知限制（面向使用者）
 
-- **表格单元格里不能换行**：Enter 在单元格内被拦掉。
+- **表格单元格不能放段落**：换行已支持，Enter / Shift+Enter 写入 `<br>`，但 Markdown 表格仍不支持单元格内多段。
 - **超高段落按字符切分**：导出 PDF 时该段的行内格式会丢失（只影响那一段）。
-- **单个 HTML 块不拆页**：超过一页时 PDF 只能整块放下，可能被页底裁掉；脚本在预览和导出中都不执行。
+- **HTML 块只按顶层拆页**：PDF 会按顶层块元素分段，但单个不可拆元素超过一页时可能被页底裁掉；脚本在预览和导出中都不执行。
 - **只提供源码**：仓库没有预编译或已公证的二进制，请按 README 自行构建；`release.sh` 的 DMG 仅供本机或内部使用。
 
 ---

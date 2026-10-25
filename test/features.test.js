@@ -88,6 +88,33 @@ const TABLE_MD = [
   });
   check('最后一格 Tab 新增一行', rowAdded.rows === 3, JSON.stringify(rowAdded));
 
+  console.log('\n[2.1] 表格单元格换行');
+  await page.evaluate(() => {
+    const cell = document.querySelector('table td');
+    cell.focus();
+    window.MF.setCaretBySourceOffset(cell, 4);   // Name 末尾
+  });
+  await page.waitForTimeout(50);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('line2', { delay: 8 });
+  await page.waitForTimeout(450);
+  const cellBreak = await page.evaluate(() => {
+    const tb = document.querySelector('table');
+    const first = tb.querySelector('tbody td');
+    return {
+      md: window.__getMarkdown(),
+      rows: tb.querySelectorAll('tbody tr').length,
+      brs: first.querySelectorAll('br.md-hardbreak').length,
+      text: first.textContent,
+      lines: window.__getMarkdown().split('\n').slice(0, 8)
+    };
+  });
+  check('单元格内换行写成 <br>', /<br>line2/.test(cellBreak.md),
+        JSON.stringify(cellBreak.lines));
+  check('单元格换行不新增表格行', cellBreak.rows === 3 && cellBreak.brs === 1, JSON.stringify(cellBreak));
+  await page.evaluate(md => window.__loadContent('', md, 'test.md'), TABLE_MD);
+  await page.waitForTimeout(200);
+
   // ---------------------------------------------------------------- 查找
   console.log('\n[3] 查找替换');
   await page.keyboard.press('Meta+f');
