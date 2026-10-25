@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-256%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -32,11 +32,11 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 
 | | Electron 应用 | Markvis |
 |---|---|---|
-| 包体 | 约 150 MB | **约 3.8 MB**（其中约 2.5 MB 是 Mermaid） |
+| 包体 | 约 150 MB | **约 3.9 MB**（其中约 2.5 MB 是 Mermaid） |
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 12,811 行：Swift 2,555 行、Web 内核 5,335 行、功能模块 2,442 行、测试 2,479 行。
+当前约 13,131 行：Swift 2,555 行、Web 内核 5,593 行、功能模块 2,442 行、测试 2,541 行。
 
 ### 功能
 
@@ -58,6 +58,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | **专注 / 打字机** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **主题** | 跟随系统 / 明亮 / 深色 / 护眼 / Nord，以及自己放进主题文件夹的 CSS；状态栏主题菜单切换，`Cmd+Shift+L` 循环 |
 | **公式 / 图表** | `$x$` 与 `$$…$$`（KaTeX）、```` ```mermaid ```` 渲染成 SVG —— 都按需加载，点一下弹出源码浮层直接改 |
+| **HTML 块** | 块级 HTML 在 sandbox iframe 里预览（脚本禁用），右上角 `</>` 打开源码浮层编辑；PDF / HTML 导出展开为普通 DOM |
 | **脚注 / 目录** | `[^id]` 引用 + `[^id]: ...` 定义（点击互相跳转），`[TOC]` 按当前标题自动重建 |
 | **拼写检查** | 输入时用系统词典检查（`Cmd+;` 切换） |
 | **文件** | 双击 `.md`、拖拽打开、最近打开、命令行参数、自动保存、关窗确认、未命名文档崩溃恢复 |
@@ -184,7 +185,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 ### 测试
 
 ```bash
-node test/engine.test.js      # 121 项 —— 核心闭环
+node test/engine.test.js      # 130 项 —— 核心闭环
 node test/features.test.js    # 126 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
@@ -195,11 +196,12 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 已知限制
 
-- 嵌套块已经支持（列表嵌列表、条目里放代码块/引用、引用里多段）。仍然是扁平的：表格不能嵌套，也不支持块级 HTML。
+- 嵌套块已经支持（列表嵌列表、条目里放代码块/引用、引用里多段）。表格仍不能嵌套；块级 HTML 在 sandbox iframe 里渲染，脚本被禁用，编辑走右上角 `</>` 源码浮层。
 - 表格单元格里不能有真正的换行。
 - 撤销是快照式的（每步存整篇 + 光标），所以能跨模式、跨重解析；代价是一步会还原整篇文档，超大文件上不如增量方案省。
 - 图片只支持「已保存文档里的粘贴」（落到同级 `assets/`）；相对路径在编辑器里能正常解析，导出时会内联为 data URL。
 - 超高段落按字符切分，该段的行内格式会丢失（只影响那一段）。
+- 块级 HTML 里的脚本不执行；单个 HTML 块超过一页时 PDF 不拆分，可能被页底裁掉。
 - 主题是纯 CSS，不能执行脚本；导出 PDF 固定用浅色版式，暗色主题不会把 PDF 变成黑底。
 - 官方只提供源码，不提供预编译或已公证的二进制；`release.sh` 打出的 DMG 仅供维护者本机或内部使用。
 

@@ -302,6 +302,51 @@
     return /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line);
   }
 
+  // ---- 块级 HTML（F13） ----
+
+  // CommonMark 的块级标签集合；行内标签（span/a/code…）仍按普通段落处理
+  var HTML_BLOCK_TAGS = {};
+  ('address article aside base basefont blockquote body caption center col colgroup dd details ' +
+   'dialog dir div dl dt fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 ' +
+   'head header hr html iframe legend li link main menu menuitem nav noframes ol optgroup option ' +
+   'p param search section summary table tbody td tfoot th thead title tr track ul')
+    .split(' ').forEach(function (t) { HTML_BLOCK_TAGS[t] = true; });
+
+  /** 返回 HTML 块的结束方式；不是块级 HTML 起始行时返回 null */
+  function htmlBlockStart(line) {
+    var s = String(line).replace(/^\s+/, '');
+    if (!s || s.charAt(0) !== '<') return null;
+    if (/^<!--/.test(s)) return { kind: 'until', end: /-->/ };
+    if (/^<\?/.test(s)) return { kind: 'until', end: /\?>/ };
+    if (/^<!\[CDATA\[/.test(s)) return { kind: 'until', end: /\]\]>/ };
+    if (/^<![A-Z]/.test(s)) return { kind: 'until', end: />/ };
+
+    var raw = /^<(script|pre|style|textarea)(?=\s|>|\/>)/i.exec(s);
+    if (raw) return { kind: 'until', end: new RegExp('</' + raw[1] + '\\s*>', 'i') };
+
+    var tag = /^<\/?([A-Za-z][\w-]*)(?=\s|\/?>|$)/.exec(s);
+    if (tag && HTML_BLOCK_TAGS[tag[1].toLowerCase()]) return { kind: 'blank' };
+    return null;
+  }
+
+  function consumeHTMLBlock(lines, i, start) {
+    var body = [];
+    if (start.kind === 'blank') {
+      while (i < lines.length && !/^\s*$/.test(lines[i])) {
+        body.push(lines[i]);
+        i++;
+      }
+      return { html: body.join('\n'), next: i };
+    }
+    while (i < lines.length) {
+      body.push(lines[i]);
+      var done = start.end.test(lines[i]);
+      i++;
+      if (done) break;
+    }
+    return { html: body.join('\n'), next: i };
+  }
+
   // ---- GFM 表格辅助 ----
 
   function isTableStart(lines, i) {
@@ -469,6 +514,15 @@
           i = endMeta + 1;
           continue;
         }
+      }
+
+      // 块级 HTML：原样收进块，渲染时进 sandbox iframe
+      var hbStart = htmlBlockStart(line);
+      if (hbStart) {
+        var hb = consumeHTMLBlock(lines, i, hbStart);
+        blocks.push({ type: 'html', html: hb.html });
+        i = hb.next;
+        continue;
       }
 
       // 围栏代码
@@ -668,6 +722,7 @@
         if (LINK_DEF_RE.test(l)) break;
         if (/^\s*\$\$/.test(l)) break;
         if (/^\s*\[TOC\]\s*$/i.test(l)) break;
+        if (htmlBlockStart(l)) break;
         if (isFenceLine(l)) break;
         if (isHrLine(l)) break;
         para.push(l);
@@ -813,6 +868,16 @@
 
       case 'paragraph':
         return '<p class="md-block" mdtype="paragraph"' + cid + '>' + renderInline(b.inline) + '</p>';
+
+      case 'html':
+        // 用户 HTML 只进 iframe：无 allow-scripts，脚本与表单不会执行。
+        // 编辑走右上角按钮 → 复用源码浮层，序列化时从 data-html 原样写回。
+        return '<div class="md-block md-html-block" mdtype="html_block" contenteditable="false"' +
+          ' data-html="' + escapeAttr(b.html) + '"' + cid + '>' +
+          '<iframe class="md-html-frame" sandbox="allow-same-origin" scrolling="no"' +
+          ' tabindex="-1" title="HTML block"></iframe>' +
+          '<button class="md-html-edit" type="button" title="编辑 HTML 源码"' +
+          ' aria-label="编辑 HTML 源码">&lt;/&gt;</button></div>';
 
       case 'blockquote':
         // 只有一段时保持老结构（行内内容直接挂在 blockquote 里），
@@ -978,7 +1043,7 @@
       }
       if (nested) return;
     }
-    if (t === 'hr' || t === 'fences') return;
+    if (t === 'hr' || t === 'fences' || t === 'html_block') return;
     if (el.textContent.length) return;
     if (el.querySelector('img')) return;
     if (el.querySelector('br')) return;
@@ -1138,7 +1203,75 @@
   }
 
   // ---------------------------------------------------------------------
-  // 公式 / 图表的源码编辑：点一下浮出一个小面板（对应 Typora 点公式弹源码框）
+  // 块级 HTML：sandbox iframe 预览（F13）
+  // ---------------------------------------------------------------------
+
+  function htmlPreviewDoc(raw) {
+    // 完整 HTML 文档原样交给 iframe；片段则补主题字体和相对路径 base
+    if (/^\s*(?:<!doctype\s+html|<html[\s>])/i.test(raw)) return raw;
+
+    var root = getComputedStyle(document.documentElement);
+    var bodyStyle = getComputedStyle(write);
+    var fg = root.getPropertyValue('--fg').trim() || bodyStyle.color;
+    var accent = root.getPropertyValue('--accent').trim() || fg;
+    var base = docBaseDir
+      ? '<base href="' + escapeAttr(encodeURI('file://' + docBaseDir)) + '">'
+      : '';
+    var css = 'html,body{margin:0;padding:0;background:transparent;overflow:hidden}' +
+      'body{font-family:' + bodyStyle.fontFamily + ';font-size:' + bodyStyle.fontSize +
+      ';line-height:' + bodyStyle.lineHeight + ';color:' + fg + ';word-wrap:break-word}' +
+      'img{max-width:100%;height:auto}a{color:' + accent + '}' +
+      'table{border-collapse:collapse;max-width:100%}' +
+      'pre{overflow:auto;white-space:pre-wrap}' +
+      '*,*::before,*::after{box-sizing:border-box}';
+
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">' + base +
+      '<style>' + css + '</style></head><body>' + raw + '</body></html>';
+  }
+
+  function fitHTMLFrame(frame) {
+    try {
+      var d = frame.contentDocument;
+      if (!d) return;
+      var h = Math.max(
+        d.documentElement ? d.documentElement.scrollHeight : 0,
+        d.body ? d.body.scrollHeight : 0
+      );
+      frame.style.height = Math.max(18, Math.ceil(h)) + 'px';
+    } catch (e) {}
+  }
+
+  function hydrateHTMLBlocks() {
+    var nodes = write.querySelectorAll('[mdtype="html_block"]');
+    if (!nodes.length) return;
+    var root = getComputedStyle(document.documentElement);
+    var themeKey = root.getPropertyValue('--fg') + '|' + root.getPropertyValue('--accent') + '|' +
+      getComputedStyle(write).fontFamily + '|' + docBaseDir;
+
+    for (var i = 0; i < nodes.length; i++) {
+      (function (el) {
+        var frame = el.querySelector('iframe.md-html-frame');
+        if (!frame) return;
+        var raw = el.getAttribute('data-html') || '';
+        var key = themeKey + '|' + raw;
+        if (frame._mfHTMLKey === key) { fitHTMLFrame(frame); return; }
+        frame._mfHTMLKey = key;
+        frame.onload = function () {
+          fitHTMLFrame(frame);
+          setTimeout(function () { fitHTMLFrame(frame); }, 80);
+        };
+        frame.srcdoc = htmlPreviewDoc(raw);
+      })(nodes[i]);
+    }
+  }
+
+  window.addEventListener('resize', function () {
+    var frames = write.querySelectorAll('iframe.md-html-frame');
+    for (var i = 0; i < frames.length; i++) fitHTMLFrame(frames[i]);
+  });
+
+  // ---------------------------------------------------------------------
+  // 公式 / 图表 / HTML 的源码编辑：点一下浮出一个小面板
   // ---------------------------------------------------------------------
 
   var mathEditing = null;   // { node, kind }
@@ -1162,13 +1295,20 @@
 
     var kind = node.getAttribute('mdtype');
     mathEditing = { node: node, kind: kind };
-    field.value = kind === 'mermaid'
-      ? (node.getAttribute('data-code') || '')
-      : (node.getAttribute('data-tex') || '');
+    field.value = kind === 'html_block'
+      ? (node.getAttribute('data-html') || '')
+      : kind === 'mermaid'
+        ? (node.getAttribute('data-code') || '')
+        : (node.getAttribute('data-tex') || '');
+    field.placeholder = kind === 'html_block'
+      ? 'HTML 源码'
+      : kind === 'mermaid' ? 'mermaid 源码' : 'TeX 源码';
+    panel.classList.toggle('mf-me-wide', kind === 'html_block');
 
     panel.classList.add('mf-show');
     var r = node.getBoundingClientRect();
-    var w = 340, h = 190;
+    var w = kind === 'html_block' ? 520 : 340;
+    var h = kind === 'html_block' ? 340 : 190;
     panel.style.left = Math.max(12, Math.min(window.innerWidth - w, r.left)) + 'px';
     panel.style.top = Math.max(12, Math.min(window.innerHeight - h, r.bottom + 8)) + 'px';
     field.focus();
@@ -1194,15 +1334,18 @@
     } else if (kind === 'math_block') {
       node.setAttribute('data-tex', val);
       node.setAttribute('data-src', '$$\n' + val + '\n$$');
+    } else if (kind === 'html_block') {
+      node.setAttribute('data-html', val);
     } else {
       node.setAttribute('data-code', val);
       node.setAttribute('data-src', '```mermaid\n' + val + '\n```');
     }
-    node.removeAttribute('data-rendered');
+    if (kind !== 'html_block') node.removeAttribute('data-rendered');
 
     closeMathEditor();
     hydrateMath();
     hydrateMermaid();
+    hydrateHTMLBlocks();
 
     var top = topBlockOf(node) || node;
     markDirty(top);
@@ -1237,6 +1380,7 @@
     refreshTOC();
     hydrateMath();
     hydrateMermaid();
+    hydrateHTMLBlocks();
   }
 
   function loadMarkdown(text) {
@@ -1426,6 +1570,9 @@
       case 'math_block':
       case 'mermaid':
         return el.getAttribute('data-src') || '';
+
+      case 'html_block':
+        return el.getAttribute('data-html') || '';
 
       case 'def_link': {
         var bodyEl = el.querySelector('.md-link-body');
@@ -1862,6 +2009,7 @@
     if (!el || !el.isConnected) return;
     if (el.getAttribute('mdtype') === 'hr') return;
     if (el.getAttribute('mdtype') === 'fences') return;
+    if (el.getAttribute('mdtype') === 'html_block') return;
 
     // 表格：结构没变时只重绘改动过的单元格，避免整表重建丢光标
     if (el.getAttribute('mdtype') === 'table') {
@@ -1921,6 +2069,7 @@
     refreshTOC();
     hydrateMath();
     hydrateMermaid();
+    hydrateHTMLBlocks();
   }, 200);
 
   // =====================================================================
@@ -2180,7 +2329,7 @@
     while (t && t.nodeType !== 1 && t !== write) t = t.parentNode;
     if (!t || t === write) return;
 
-    var typed = closestTyped(t, ['math_inline', 'math_block', 'mermaid']);
+    var typed = closestTyped(t, ['math_inline', 'math_block', 'mermaid', 'html_block']);
     if (typed) {
       e.preventDefault();
       openMathEditor(typed);
@@ -3252,6 +3401,64 @@
   }
 
   /**
+   * 导出/打印里的 HTML 块：拆掉 sandbox iframe，换成可排版的普通 DOM。
+   * 同时移除脚本、内嵌页面、表单刷新和 on* / javascript: 属性。
+   */
+  function sanitizedHTML(raw) {
+    var html = String(raw || '');
+    if (/^\s*(?:<!doctype\s+html|<html[\s>])/i.test(html)) {
+      try {
+        var full = new DOMParser().parseFromString(html, 'text/html');
+        var head = full.head
+          ? Array.prototype.map.call(
+              full.head.querySelectorAll('style,link[rel="stylesheet"]'),
+              function (n) { return n.outerHTML; }).join('')
+          : '';
+        html = head + (full.body ? full.body.innerHTML : '');
+      } catch (e) {}
+    }
+
+    var tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    var bad = tpl.content.querySelectorAll(
+      'script,iframe,object,embed,base,meta[http-equiv="refresh" i]');
+    for (var i = 0; i < bad.length; i++) {
+      if (bad[i].parentNode) bad[i].parentNode.removeChild(bad[i]);
+    }
+    var all = tpl.content.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+      var attrs = Array.prototype.slice.call(all[j].attributes);
+      for (var k = 0; k < attrs.length; k++) {
+        var name = attrs[k].name;
+        var value = String(attrs[k].value || '');
+        if (/^on/i.test(name) ||
+            (/^(href|src|xlink:href|formaction|action)$/i.test(name) &&
+             /^\s*javascript:/i.test(value))) {
+          all[j].removeAttribute(name);
+        }
+      }
+    }
+    return tpl.innerHTML;
+  }
+
+  function printableHTMLBlock(source) {
+    var box = document.createElement('div');
+    box.className = 'md-block md-html-print';
+    box.innerHTML = sanitizedHTML(source.getAttribute('data-html') || '');
+    return box;
+  }
+
+  /** 独立 HTML 导出也把 HTML 块展开，避免导出 iframe 壳 */
+  function exportWriteHTML() {
+    var clone = write.cloneNode(true);
+    var blocks = clone.querySelectorAll('[mdtype="html_block"]');
+    for (var i = 0; i < blocks.length; i++) {
+      blocks[i].parentNode.replaceChild(printableHTMLBlock(blocks[i]), blocks[i]);
+    }
+    return clone.innerHTML;
+  }
+
+  /**
    * 把当前文档排成 A4 页，返回每页的 HTML。
    * 页面容器与正文同宽，所以排版规则、字体、间距与编辑器完全一致。
    */
@@ -3298,8 +3505,11 @@
 
     for (var i = 0; i < write.children.length; i++) {
       // front matter 是元数据，和 Typora 一样不进 PDF/HTML 正文
-      if (write.children[i].getAttribute('mdtype') === 'meta') continue;
-      var el = write.children[i].cloneNode(true);
+      var sourceEl = write.children[i];
+      if (sourceEl.getAttribute('mdtype') === 'meta') continue;
+      var el = sourceEl.getAttribute('mdtype') === 'html_block'
+        ? printableHTMLBlock(sourceEl)
+        : sourceEl.cloneNode(true);
       el.classList.remove('mf-focus-current');
 
       if (blockHeight(el, content.w) > limit) {
@@ -3514,7 +3724,7 @@
       '</style>\n' +
       '</head>\n' +
       '<body class="mf-export-standalone">\n' +
-      '<main id="scroll"><article id="write">' + write.innerHTML + '</article></main>\n' +
+      '<main id="scroll"><article id="write">' + exportWriteHTML() + '</article></main>\n' +
       '</body>\n</html>\n';
   };
 

@@ -911,6 +911,68 @@ function check(name, cond, extra) {
   check('条目内段末回车后输入落到新行',
         typedInEmpty === '- 第一段\n\n  新段\n\n  第二段', JSON.stringify(typedInEmpty));
 
+  console.log('\n[7.5] F13 块级 HTML');
+  const hb = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = '<div class="card" style="padding:6px"><strong>Hello</strong> HTML</div>\n\nafter paragraph';
+    window.__loadContent('', src, 'html.md');
+    await wait(450);
+    const el = document.querySelector('[mdtype="html_block"]');
+    const frame = el && el.querySelector('iframe.md-html-frame');
+    return {
+      exists: !!el,
+      data: el ? el.getAttribute('data-html') : '',
+      text: frame && frame.contentDocument && frame.contentDocument.body
+        ? frame.contentDocument.body.textContent.trim() : '',
+      sandbox: frame ? frame.getAttribute('sandbox') : '',
+      md: window.__getMarkdown(),
+      after: document.querySelector('#write p') ? document.querySelector('#write p').textContent : ''
+    };
+  });
+  check('HTML 块解析并渲染 iframe', hb.exists && /Hello HTML/.test(hb.text), JSON.stringify(hb));
+  check('iframe 是 sandbox 且禁用脚本', /allow-same-origin/.test(hb.sandbox) && !/allow-scripts/.test(hb.sandbox), hb.sandbox);
+  check('HTML 块原样序列化且不吃后面的段落',
+        hb.data.indexOf('<div class="card"') === 0 && /after paragraph/.test(hb.md) && hb.after === 'after paragraph',
+        JSON.stringify(hb.md.slice(0, 120)));
+
+  const hbEdit = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    document.querySelector('.md-html-edit').click();
+    await wait(80);
+    const panel = document.getElementById('mf-math-editor');
+    const field = document.getElementById('mf-math-input');
+    const opened = panel.classList.contains('mf-show') && /class="card"/.test(field.value);
+    field.value = '<section><em>Changed</em></section><script>window.__htmlPwned=1</script>';
+    document.getElementById('mf-me-apply').click();
+    await wait(450);
+    const el = document.querySelector('[mdtype="html_block"]');
+    const frame = el && el.querySelector('iframe.md-html-frame');
+    const exportHTML = window.__buildExportHTML();
+    const printed = window.__paginateForPrint();
+    return {
+      opened,
+      closed: !panel.classList.contains('mf-show'),
+      text: frame && frame.contentDocument && frame.contentDocument.body
+        ? frame.contentDocument.body.textContent.trim() : '',
+      pwned: !!window.__htmlPwned,
+      md: window.__getMarkdown(),
+      exportHasRaw: exportHTML.indexOf('<section><em>Changed</em></section>') >= 0,
+      exportHasIframe: /<iframe/i.test(exportHTML),
+      exportHasScript: /<script/i.test(exportHTML),
+      printHasRaw: printed.pages.join('').indexOf('<section><em>Changed</em></section>') >= 0,
+      printHasIframe: /<iframe/i.test(printed.pages.join(''))
+    };
+  });
+  check('点编辑按钮打开 HTML 源码浮层', hbEdit.opened && hbEdit.closed, JSON.stringify(hbEdit));
+  check('编辑后 iframe 内容刷新', /^Changed/.test(hbEdit.text), hbEdit.text);
+  check('HTML 里的脚本被 sandbox 阻止', hbEdit.pwned === false);
+  check('编辑结果进入 Markdown', /<section><em>Changed<\/em><\/section>/.test(hbEdit.md), JSON.stringify(hbEdit.md));
+  check('导出展开原始 HTML，不残留 iframe/script',
+        hbEdit.exportHasRaw && !hbEdit.exportHasIframe && !hbEdit.exportHasScript,
+        JSON.stringify([hbEdit.exportHasRaw, hbEdit.exportHasIframe, hbEdit.exportHasScript]));
+  check('PDF 分页展开 HTML 块', hbEdit.printHasRaw && !hbEdit.printHasIframe,
+        JSON.stringify([hbEdit.printHasRaw, hbEdit.printHasIframe]));
+
   console.log('\n[8] 运行时错误');
 
   check('无未捕获异常', errors.length === 0, errors.join(' | '));

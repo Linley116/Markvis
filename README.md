@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-256%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -31,11 +31,11 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. Markvis does the
 
 | | Electron apps | Markvis |
 |---|---|---|
-| Binary size | ~150 MB | **~3.8 MB** (about 2.5 MB of it is Mermaid) |
+| Binary size | ~150 MB | **~3.9 MB** (about 2.5 MB of it is Mermaid) |
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The project is currently about 12,811 lines: 2,555 Swift, 5,335 web core, 2,442 features, and 2,479 tests.
+The project is currently about 13,131 lines: 2,555 Swift, 5,593 web core, 2,442 features, and 2,541 tests.
 
 ### Features
 
@@ -57,6 +57,7 @@ The project is currently about 12,811 lines: 2,555 Swift, 5,335 web core, 2,442 
 | **Focus / typewriter** | `Cmd+Shift+F` / `Cmd+Shift+T` |
 | **Themes** | System / light / dark / sepia / Nord plus your own CSS files, switched from the status-bar theme menu (`Cmd+Shift+L` cycles) |
 | **Math / diagrams** | `$x$` and `$$…$$` via KaTeX, ```` ```mermaid ```` rendered to SVG — both lazy-loaded, and a click opens the source in a floating editor |
+| **HTML blocks** | Block-level HTML previews in a sandboxed iframe (scripts disabled); the `</>` button opens a source overlay; PDF / HTML export flattens it to plain DOM |
 | **Footnotes / TOC** | `[^id]` references with click-through to `[^id]: ...` definitions, `[TOC]` rebuilt from the current headings |
 | **Spelling** | System spellcheck while typing (`Cmd+;` to toggle) |
 | **Files** | Double-click `.md`, drag to window, Open Recent, CLI argument, autosave, close confirmation, crash recovery for untitled documents |
@@ -183,7 +184,7 @@ MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alon
 ### Tests
 
 ```bash
-node test/engine.test.js      # 121 assertions — core loop
+node test/engine.test.js      # 130 assertions — core loop
 node test/features.test.js    # 126 assertions — features
 ./test/native.sh                                       # native Swift tests
 node test/bench.js                                     # performance baseline
@@ -194,11 +195,12 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 ### Known limitations
 
-- Nested blocks work now (lists in lists, code blocks and quotes inside items, multi-paragraph quotes). Still flat: tables cannot be nested, and there is no block-level HTML support.
+- Nested blocks work (lists in lists, code blocks and quotes inside items, multi-paragraph quotes). Tables still cannot be nested. Block-level HTML renders in a sandboxed iframe with scripts disabled; edit it through the `</>` source overlay.
 - Table cells cannot contain a real line break.
 - Undo is snapshot-based (whole document + caret per step), which is why it survives mode switches and block re-parsing. The trade-off: a step restores the entire document rather than one node, so it is not cheap on very large files.
 - Images work only for pasted content in a saved document (they go to `assets/` next to it). Relative paths resolve in the editor and are inlined as data URLs on export.
 - Super-tall paragraphs are split by character; inline formatting is lost for that paragraph only.
+- Scripts inside block-level HTML never run. A single HTML block taller than one page is not split in PDF export and may be clipped at the page bottom.
 - Custom themes are CSS only (no scripts), and PDF export always uses the light print palette — a dark theme does not turn the PDF black.
 - Source only: there are no prebuilt or notarized binaries. Any DMG produced by `release.sh` is for local or internal use by the maintainer.
 

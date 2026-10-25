@@ -68,6 +68,16 @@ if !lowFill.isEmpty {
 
 // 内容完整性：源文件的有效文本（去空白）必须出现在 PDF 中
 if args.count > 2, let source = try? String(contentsOfFile: args[2], encoding: .utf8) {
+    let normalizedForRequired = allText.components(separatedBy: .whitespacesAndNewlines)
+        .joined().precomposedStringWithCompatibilityMapping
+    if args.count > 3, !args[3].isEmpty {
+        let required = args[3].components(separatedBy: .whitespaces)
+            .joined().precomposedStringWithCompatibilityMapping
+        if !normalizedForRequired.contains(required) {
+            print("FAIL: PDF 缺少必需文本「\(args[3])」")
+            failed = true
+        }
+    }
     // PingFang 的 PDF ToUnicode 会把部分汉字映射成康熙部首（文档 → ⽂档），
     // NFKC 归一化能把康熙部首还原成普通汉字，避免误判为「内容缺失」
     let normalized = allText.components(separatedBy: .whitespacesAndNewlines)

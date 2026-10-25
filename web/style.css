@@ -549,6 +549,52 @@ a:hover { text-decoration: underline; }
 
 .md-math, .md-math-block, .md-mermaid { cursor: pointer; }
 
+/* ---------- F13：块级 HTML 沙箱 ---------- */
+
+.md-html-block {
+  position: relative;
+  margin: .9em 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  transition: border-color .12s;
+}
+
+.md-html-block:hover { border-color: var(--border); }
+
+.md-html-frame {
+  display: block;
+  width: 100%;
+  min-height: 18px;
+  border: 0;
+  background: transparent;
+}
+
+.md-html-edit {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 2;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--muted);
+  font: 10px/1.4 "SF Mono", Menlo, monospace;
+  opacity: 0;
+  transition: opacity .12s, color .12s;
+}
+
+.md-html-block:hover .md-html-edit,
+.md-html-edit:focus { opacity: 1; }
+.md-html-edit:hover { color: var(--accent); }
+
+.md-html-print { margin: .9em 0; }
+.md-html-print > :first-child { margin-top: 0; }
+.md-html-print > :last-child { margin-bottom: 0; }
+
+#mf-math-editor.mf-me-wide { width: 520px; }
+#mf-math-editor.mf-me-wide #mf-math-input { height: 260px; }
+
 /* ---------- 状态栏 ---------- */
 
 #status {
@@ -1404,7 +1450,9 @@ body.mf-export h3 { font-size: 1.2em; }
     overflow: visible !important;
   }
 
-  #status, #mf-sidebar, #mf-outline-btn, #mf-theme-menu, #mf-search, #mf-autocomplete { display: none !important; }
+  #status, #mf-sidebar, #mf-outline-btn, #mf-theme-menu, #mf-search, #mf-autocomplete,
+  #mf-math-editor, .md-html-edit { display: none !important; }
+  .md-html-frame { display: none !important; }
   body.mf-sidebar-open #scroll { margin-left: 0 !important; }
   #scroll { height: auto !important; overflow: visible !important; }
   #write { max-width: none !important; padding: 0 !important; }

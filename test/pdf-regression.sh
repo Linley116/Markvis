@@ -42,6 +42,10 @@ for i in range(1, 81):
 parts.append('```')
 parts.append('')
 
+# 块级 HTML：验证 sandbox iframe 在 PDF 里被展开成普通 DOM
+parts += ['## HTML 块', '',
+          '<div style="padding:8px 12px;border:1px solid #999">HTML-BLOCK-MARKER 这一段由块级 HTML 渲染，必须出现在 PDF 里。</div>', '']
+
 # 正文末段：用来验证页尾没有被裁
 parts += ['## 结尾', '', 'END-OF-DOCUMENT-MARKER 这一段必须完整出现在 PDF 的最后一页，否则说明导出被截断。', '']
 
@@ -74,4 +78,4 @@ if [[ ! -s "$TMP/out.pdf" ]]; then
   exit 1
 fi
 
-swift "$ROOT/test/pdfcheck.swift" "$TMP/out.pdf" "$TMP/doc.md"
+swift "$ROOT/test/pdfcheck.swift" "$TMP/out.pdf" "$TMP/doc.md" "HTML-BLOCK-MARKER"
