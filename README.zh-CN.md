@@ -157,7 +157,7 @@ cd markvis
 只构建、不安装：
 
 ```bash
-./build.sh --keep                    # 保留 build/Markvis.bundle（供 release.sh 打包）
+./build.sh --keep                    # 保留 build/.Markvis.bundle（供 release.sh 打包）
 MARKVIS_NO_INSTALL=1 ./build.sh --keep   # 只构建，不动 ~/Applications
 ```
 

@@ -156,7 +156,7 @@ cd markvis
 Build without installing:
 
 ```bash
-./build.sh --keep                    # leaves build/Markvis.bundle for release.sh
+./build.sh --keep                    # leaves build/.Markvis.bundle for release.sh
 MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alone
 ```
 

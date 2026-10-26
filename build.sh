@@ -1,14 +1,14 @@
 #!/bin/zsh
 # 构建 Markvis 并安装到 ~/Applications
 #   ./build.sh          构建 + 安装，不留下 build/Markvis.app
-#   ./build.sh --keep   构建 + 安装，并保留 build/Markvis.bundle 供分发打包
+#   ./build.sh --keep   构建 + 安装，并保留 build/.Markvis.bundle 供分发打包
 #
 # build/stage 是非 .app 目录，LaunchServices 不会把它当成应用注册；
 # 安装用 rsync 覆盖，避免 rm 旧 .app 后被安全删除机制移进废纸篓留下一堆副本。
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-BUNDLE="$ROOT/build/Markvis.bundle"
+BUNDLE="$ROOT/build/.Markvis.bundle"
 STAGE="$ROOT/build/stage"
 DEST="$HOME/Applications/Markvis.app"
 LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
