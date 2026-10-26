@@ -239,9 +239,10 @@ hr {
 }
 
 pre.md-fences {
+  position: relative;
   background: var(--code-bg);
   border-radius: 6px;
-  padding: 14px 18px;
+  padding: 24px 18px 14px;
   overflow-x: auto;
   font-size: 13.5px;
   line-height: 1.6;
@@ -252,6 +253,31 @@ pre.md-fences code {
   background: none;
   padding: 0;
 }
+
+.md-fence-lang {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  max-width: 140px;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--muted);
+  font: 11px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
+  outline: none;
+}
+
+pre.md-fences:hover .md-fence-lang,
+.md-fence-lang:focus {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.md-fence-lang:hover { border-color: var(--border); color: var(--fg); }
 
 /* highlight.js token 配色，跟随主题变量 */
 .hljs-keyword,
@@ -1404,7 +1430,10 @@ body.mf-export pre.md-fences code {
   word-break: break-word;
 }
 
-body.mf-export pre.md-fences { overflow-x: hidden !important; }
+body.mf-export pre.md-fences {
+  overflow-x: hidden !important;
+  padding-top: 14px !important;
+}
 
 /* 导出字体与 Typora 保持一致（PingFang SC）。
    注意：PingFang 的 PDF ToUnicode 会把部分汉字映射成康熙部首
@@ -1526,4 +1555,7 @@ body.mf-export h3 { font-size: 1.2em; }
 .mf-export-standalone #scroll { height: auto; overflow: visible; }
 .mf-export-standalone #write { padding: 40px 24px 80px; }
 .mf-export-standalone .mf-anchor { display: none; }
+.mf-export-standalone pre.md-fences { padding-top: 14px; }
+body.mf-export .md-fence-lang,
+.mf-export-standalone .md-fence-lang { display: none !important; }
 

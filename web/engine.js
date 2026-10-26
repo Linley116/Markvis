@@ -870,6 +870,48 @@
     return renderChildren(blocks);
   }
 
+  var FENCE_COMMON = [
+    'javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp', 'go',
+    'rust', 'swift', 'objectivec', 'kotlin', 'php', 'ruby', 'sql', 'bash',
+    'shell', 'json', 'yaml', 'xml', 'html', 'css', 'scss', 'markdown', 'diff'
+  ];
+
+  function fenceLanguageLabel(name) {
+    var def = window.hljs && window.hljs.getLanguage(name);
+    return def && def.name ? def.name : name;
+  }
+
+  /** 代码块右上角的语言下拉；只负责展示，值写回由 change 委托处理 */
+  function fenceLanguageSelect(current) {
+    var cur = String(current || '').toLowerCase();
+    var seen = Object.create(null);
+    var opts = [];
+
+    function add(value, label) {
+      if (seen[value]) return;
+      seen[value] = true;
+      opts.push('<option value="' + escapeAttr(value) + '"' +
+        (value === cur ? ' selected' : '') + '>' + escapeHtml(label) + '</option>');
+    }
+
+    add('', 'Plain text');
+    FENCE_COMMON.forEach(function (name) {
+      if (window.hljs && !window.hljs.getLanguage(name) && name !== cur) return;
+      add(name, fenceLanguageLabel(name));
+    });
+
+    if (window.hljs && window.hljs.listLanguages) {
+      window.hljs.listLanguages().slice().sort(function (a, b) {
+        return fenceLanguageLabel(a).localeCompare(fenceLanguageLabel(b));
+      }).forEach(function (name) { add(name, fenceLanguageLabel(name)); });
+    }
+
+    if (cur && !seen[cur]) add(cur, fenceLanguageLabel(cur));
+
+    return '<select class="md-fence-lang" contenteditable="false" tabindex="-1"' +
+      ' title="选择代码语言" aria-label="选择代码语言">' + opts.join('') + '</select>';
+  }
+
   function renderBlock(b) {
     var cid = ' cid="' + b.cid + '"';
     switch (b.type) {
@@ -927,7 +969,8 @@
 
         return '<pre class="md-block md-fences" mdtype="fences" data-fences="' +
           escapeAttr(b.lang ? '```' + b.lang : '```') + '"' + cid + '>' +
-          '<code class="language-' + escapeAttr(lang) + '">' + codeHTML + '</code></pre>';
+          '<code class="language-' + escapeAttr(lang) + '">' + codeHTML + '</code>' +
+          fenceLanguageSelect(b.lang || '') + '</pre>';
       }
 
       case 'hr':
@@ -1384,6 +1427,39 @@
     });
   })();
 
+  /** 切换代码块语言：只改 fence 标记与高亮，不动代码正文 */
+  function setFenceLanguage(pre, lang) {
+    lang = String(lang || '').toLowerCase();
+    var code = pre.querySelector('code');
+    if (!code) return;
+    var text = code.textContent;
+
+    programEdit(function () {
+      pre.setAttribute('data-fences', lang ? '```' + lang : '```');
+      code.className = lang ? 'language-' + lang : '';
+      if (window.hljs && lang && window.hljs.getLanguage(lang)) {
+        try {
+          code.innerHTML = window.hljs.highlight(text, {
+            language: lang,
+            ignoreIllegals: true
+          }).value;
+        } catch (e) {
+          code.textContent = text;
+        }
+      } else {
+        code.textContent = text;
+      }
+    });
+    setEdited(true);
+  }
+
+  write.addEventListener('change', function (e) {
+    var sel = e.target && e.target.closest ? e.target.closest('.md-fence-lang') : null;
+    if (!sel) return;
+    var pre = sel.closest('pre.md-fences');
+    if (pre) setFenceLanguage(pre, sel.value);
+  });
+
   function renderDoc() {
     write.innerHTML = doc.map(renderBlock).join('');
     padEmpties();
@@ -1569,8 +1645,12 @@
         return qout.join('\n');
       }
 
-      case 'fences':
-        return (el.dataset.fences || '```') + '\n' + el.textContent + '\n```';
+      case 'fences': {
+        // 右上角语言下拉不能算进代码正文
+        var codeEl = el.querySelector('code');
+        return (el.dataset.fences || '```') + '\n' +
+          (codeEl ? codeEl.textContent : '') + '\n```';
+      }
 
       case 'hr':
         return '---';
@@ -3639,6 +3719,15 @@
     return box;
   }
 
+  /** 导出/打印时移除编辑器专用的代码语言下拉 */
+  function stripFenceControls(root) {
+    var selects = root.querySelectorAll('.md-fence-lang');
+    for (var i = 0; i < selects.length; i++) {
+      if (selects[i].parentNode) selects[i].parentNode.removeChild(selects[i]);
+    }
+    return root;
+  }
+
   /** 独立 HTML 导出也把 HTML 块展开，避免导出 iframe 壳 */
   function exportWriteHTML() {
     var clone = write.cloneNode(true);
@@ -3646,7 +3735,7 @@
     for (var i = 0; i < blocks.length; i++) {
       blocks[i].parentNode.replaceChild(printableHTMLBlock(blocks[i]), blocks[i]);
     }
-    return clone.innerHTML;
+    return stripFenceControls(clone).innerHTML;
   }
 
   /**
@@ -3701,6 +3790,7 @@
       var el = sourceEl.getAttribute('mdtype') === 'html_block'
         ? printableHTMLBlock(sourceEl)
         : sourceEl.cloneNode(true);
+      if (sourceEl.getAttribute('mdtype') === 'fences') stripFenceControls(el);
       el.classList.remove('mf-focus-current');
 
       if (blockHeight(el, content.w) > limit) {

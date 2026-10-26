@@ -89,6 +89,10 @@
         if (p && p.classList && p.classList.contains('md-meta')) {
           return NodeFilter.FILTER_REJECT;
         }
+        // 代码块语言下拉只是编辑器控件，不属于正文
+        if (p && p.closest && p.closest('.md-fence-lang')) {
+          return NodeFilter.FILTER_REJECT;
+        }
         return NodeFilter.FILTER_ACCEPT;
       }
     });

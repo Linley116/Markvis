@@ -57,6 +57,41 @@ function check(name, cond, extra) {
   check('代码块保留 language- 类', /language-js/.test(hl.cls || ''), hl.cls);
   check('高亮不改动源码文本', /const pipeline/.test(hl.raw || ''), hl.raw);
 
+  const fenceLang = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const select = document.querySelector('pre.md-fences .md-fence-lang');
+    const pre = select.closest('pre.md-fences');
+    const code = pre.querySelector('code');
+    const options = [...select.options].map(o => o.value);
+    select.value = 'python';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await wait(160);
+    const python = {
+      md: window.__getMarkdown(),
+      cls: code.className,
+      text: code.textContent,
+      fence: pre.getAttribute('data-fences')
+    };
+    select.value = 'js';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await wait(120);
+    return {
+      options,
+      python,
+      restored: window.__getMarkdown(),
+      selectCount: document.querySelectorAll('.md-fence-lang').length,
+      exportHasSelect: /md-fence-lang/.test(window.__buildExportHTML())
+    };
+  });
+  check('代码块有语言下拉', fenceLang.selectCount === 1 &&
+        fenceLang.options.includes('python') && fenceLang.options.includes('javascript'),
+        JSON.stringify(fenceLang.options.slice(0, 12)));
+  check('切换语言写回 Markdown 并重新高亮',
+        /^```python/m.test(fenceLang.python.md) && fenceLang.python.cls === 'language-python' &&
+        fenceLang.python.fence === '```python' && /const pipeline/.test(fenceLang.python.text) &&
+        /^```js/m.test(fenceLang.restored), JSON.stringify(fenceLang.python));
+  check('导出不包含语言下拉', fenceLang.exportHasSelect === false);
+
   const inline = await page.evaluate(() => {
     const plain = el => {
       const c = el.cloneNode(true);
