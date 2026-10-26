@@ -151,12 +151,12 @@ cd markvis
 ./build.sh          # compile + install to ~/Applications
 ```
 
-`build.sh` compiles six Swift files with `swiftc`, assembles the `.app` bundle, ad-hoc signs it, and installs a single visible copy to `~/Applications` (so Launchpad does not show duplicates). Because you built it locally, it runs without Apple notarization.
+`build.sh` compiles six Swift files with `swiftc`, assembles the bundle in a non-`.app` `build/stage` directory, then rsyncs it over `~/Applications`. The staging copy is never registered with LaunchServices, so Launchpad keeps a single entry. Because you built it locally, it runs without Apple notarization.
 
 Build without installing:
 
 ```bash
-./build.sh --keep                    # leaves build/Markvis.app in place
+./build.sh --keep                    # leaves build/Markvis.bundle for release.sh
 MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alone
 ```
 

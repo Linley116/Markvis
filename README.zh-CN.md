@@ -152,12 +152,12 @@ cd markvis
 ./build.sh          # 编译 + 安装到 ~/Applications
 ```
 
-`build.sh` 用 `swiftc` 编译六个 Swift 文件、组装 `.app`、ad-hoc 签名，并只往 `~/Applications` 装一份（避免启动台出现重复图标）。源码是你自己拉的、产物是你自己编的，本地运行不需要 Apple 公证。
+`build.sh` 用 `swiftc` 编译六个 Swift 文件，先在非 `.app` 的 `build/stage` 里组装，再 rsync 覆盖安装到 `~/Applications`；构建中转不会被 LaunchServices 注册，启动台只保留一份。源码是你自己拉的、产物是你自己编的，本地运行不需要 Apple 公证。
 
 只构建、不安装：
 
 ```bash
-./build.sh --keep                    # 保留 build/Markvis.app
+./build.sh --keep                    # 保留 build/Markvis.bundle（供 release.sh 打包）
 MARKVIS_NO_INSTALL=1 ./build.sh --keep   # 只构建，不动 ~/Applications
 ```
 

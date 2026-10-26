@@ -10,8 +10,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP="$ROOT/build/Markvis.app"
+APP="$ROOT/build/Markvis.bundle"
 DIST="$ROOT/dist"
+LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT/Info.plist")"
 DMG="$DIST/Markvis-$VERSION.dmg"
 IDENTITY="${MARKVIS_SIGN_IDENTITY:-}"
@@ -34,9 +35,14 @@ STAGE="$ROOT/build/dmg-stage"
 mkdir -p "$STAGE" "$DIST"
 # ditto 覆盖而不是先 rm -rf：构建目录也遵守本机的批量删除保护
 ditto "$APP" "$STAGE/Markvis.app"
+# DMG staging 也是 .app，不能让它留在 LaunchServices 里变成第二个图标
+[[ -x "$LSREG" ]] && "$LSREG" -u "$STAGE/Markvis.app" >/dev/null 2>&1 || true
 ln -sfn /Applications "$STAGE/Applications"
 hdiutil create -quiet -volname "Markvis $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 hdiutil verify -quiet "$DMG"
+# 打包完把 staging app 改名成非 .app，避免被索引回应用列表
+[[ -d "$STAGE/Markvis.app" ]] && mv "$STAGE/Markvis.app" "$STAGE/Markvis.bundle"
+[[ -x "$LSREG" ]] && "$LSREG" -u "$STAGE/Markvis.app" >/dev/null 2>&1 || true
 
 if [[ -n "$IDENTITY" ]]; then
   codesign --force --timestamp --sign "$IDENTITY" "$DMG"
