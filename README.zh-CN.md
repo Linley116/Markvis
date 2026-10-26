@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-267%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-269%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -36,7 +36,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 13,745 行：Swift 2,555 行、Web 内核 5,945 行、功能模块 2,549 行、测试 2,696 行。
+当前约 14,092 行：Swift 2,555 行、Web 内核 6,262 行、功能模块 2,549 行、测试 2,726 行。
 
 ### 功能
 
@@ -48,7 +48,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | **200ms 画笔** | 只重绘脏块；块内 HTML 相同就完全不碰 DOM |
 | **`expand`** | 光标移进 `**粗体**`，标记浮出来 —— 而且可编辑：能删掉一个 `*`、能用方向键穿过去、能在中间插字 |
 | **源码模式** | `Cmd+/` 在渲染视图和原文之间双向切换 |
-| **代码块** | 围栏高亮（180+ 语言），实时模式右上角语言下拉，源码模式语言名补全 |
+| **代码块** | 围栏高亮（内置 36 种常用语言），实时模式右上角语言输入，输入字符筛选并选择，源码模式语言名补全 |
 | **多文档** | 一份文档一个窗口，原生标签页组（`Cmd+T`）；重启恢复上次会话，重复打开同一文件只聚焦已有窗口 |
 | **表格** | Tab / Shift-Tab 单元格导航、末格自动加行、Enter 单元格内换行（`<br>`）、CJK 内容友好的列宽 |
 | **查找替换** | `Cmd+F`，用 CSS Custom Highlight —— 不往文档里插任何标记元素 |
@@ -187,7 +187,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 ### 测试
 
 ```bash
-node test/engine.test.js      # 136 项 —— 核心闭环
+node test/engine.test.js      # 138 项 —— 核心闭环
 node test/features.test.js    # 131 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准

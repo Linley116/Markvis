@@ -59,38 +59,68 @@ function check(name, cond, extra) {
 
   const fenceLang = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const select = document.querySelector('pre.md-fences .md-fence-lang');
-    const pre = select.closest('pre.md-fences');
+    const input = document.querySelector('pre.md-fences .md-fence-lang-input');
+    const pre = input.closest('pre.md-fences');
     const code = pre.querySelector('code');
-    const options = [...select.options].map(o => o.value);
-    select.value = 'python';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const menu = () => document.getElementById('mf-fence-lang-menu') || document.querySelector('.md-fence-lang-menu');
+    const labels = () => [...menu().querySelectorAll('button[data-lang] span')].map(s => s.textContent);
+
+    input.focus();
+    await wait(60);
+    const quickCount = labels().length;
+
+    input.value = 'plain';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(60);
+    const plainLabels = labels();
+
+    input.value = 'pyth';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(60);
+    const matches = [...menu().querySelectorAll('button[data-lang]')].map(b => b.getAttribute('data-lang'));
+    const py = menu().querySelector('button[data-lang="python"]');
+    py.click();
     await wait(160);
     const python = {
       md: window.__getMarkdown(),
       cls: code.className,
       text: code.textContent,
-      fence: pre.getAttribute('data-fences')
+      fence: pre.getAttribute('data-fences'),
+      input: input.value
     };
-    select.value = 'js';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    await wait(120);
+
+    // 输入 js 后回车，恢复演示文档
+    input.focus();
+    input.value = 'js';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(60);
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await wait(160);
+
     return {
-      options,
+      quickCount,
+      plainLabels,
+      matches,
       python,
       restored: window.__getMarkdown(),
-      selectCount: document.querySelectorAll('.md-fence-lang').length,
-      exportHasSelect: /md-fence-lang/.test(window.__buildExportHTML())
+      inputCount: document.querySelectorAll('.md-fence-lang-input').length,
+      exportHasPicker: /md-fence-lang/.test(window.__buildExportHTML())
     };
   });
-  check('代码块有语言下拉', fenceLang.selectCount === 1 &&
-        fenceLang.options.includes('python') && fenceLang.options.includes('javascript'),
-        JSON.stringify(fenceLang.options.slice(0, 12)));
-  check('切换语言写回 Markdown 并重新高亮',
+  check('代码块有语言输入框，默认只展示常用项',
+        fenceLang.inputCount === 1 && fenceLang.quickCount <= 14 && fenceLang.quickCount >= 8,
+        JSON.stringify({ count: fenceLang.quickCount }));
+  check('输入字符可匹配语言', fenceLang.matches.includes('python') &&
+        fenceLang.matches.length < 24, JSON.stringify(fenceLang.matches));
+  check('语言列表按显示名去重', new Set(fenceLang.plainLabels).size === fenceLang.plainLabels.length &&
+        fenceLang.plainLabels.filter(l => l === 'Plain text').length === 1,
+        JSON.stringify(fenceLang.plainLabels));
+  check('选择语言写回 Markdown 并重新高亮',
         /^```python/m.test(fenceLang.python.md) && fenceLang.python.cls === 'language-python' &&
-        fenceLang.python.fence === '```python' && /const pipeline/.test(fenceLang.python.text) &&
+        fenceLang.python.fence === '```python' && fenceLang.python.input === 'python' &&
+        /const pipeline/.test(fenceLang.python.text) &&
         /^```js/m.test(fenceLang.restored), JSON.stringify(fenceLang.python));
-  check('导出不包含语言下拉', fenceLang.exportHasSelect === false);
+  check('导出不包含语言控件', fenceLang.exportHasPicker === false);
 
   const inline = await page.evaluate(() => {
     const plain = el => {

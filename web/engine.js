@@ -876,40 +876,66 @@
     'shell', 'json', 'yaml', 'xml', 'html', 'css', 'scss', 'markdown', 'diff'
   ];
 
+  var FENCE_LANGS = null;
+
   function fenceLanguageLabel(name) {
     var def = window.hljs && window.hljs.getLanguage(name);
     return def && def.name ? def.name : name;
   }
 
-  /** 代码块右上角的语言下拉；只负责展示，值写回由 change 委托处理 */
-  function fenceLanguageSelect(current) {
-    var cur = String(current || '').toLowerCase();
-    var seen = Object.create(null);
-    var opts = [];
+  /** 语言清单：按 value 与显示名双重去重，忽略与 Plain text 重复的 plaintext */
+  function fenceLanguageEntries() {
+    if (FENCE_LANGS) return FENCE_LANGS;
 
-    function add(value, label) {
-      if (seen[value]) return;
-      seen[value] = true;
-      opts.push('<option value="' + escapeAttr(value) + '"' +
-        (value === cur ? ' selected' : '') + '>' + escapeHtml(label) + '</option>');
+    var entries = [];
+    var seenValue = Object.create(null);
+    var seenLabel = Object.create(null);
+
+    function add(value, label, aliases, rank) {
+      value = String(value || '').toLowerCase();
+      if (value === 'plaintext' || value === 'text' || value === 'txt') return;
+      if (value && seenValue[value]) return;
+
+      label = String(label || value || 'Plain text');
+      var labelKey = label.toLowerCase();
+      if (seenLabel[labelKey]) return;
+
+      seenValue[value] = true;
+      seenLabel[labelKey] = true;
+      entries.push({
+        value: value,
+        label: label,
+        rank: rank || 999,
+        search: (value + ' ' + label + ' ' + (aliases || []).join(' ')).toLowerCase()
+      });
     }
 
-    add('', 'Plain text');
-    FENCE_COMMON.forEach(function (name) {
-      if (window.hljs && !window.hljs.getLanguage(name) && name !== cur) return;
-      add(name, fenceLanguageLabel(name));
+    add('', 'Plain text', [], 0);
+    FENCE_COMMON.forEach(function (name, i) {
+      if (window.hljs && !window.hljs.getLanguage(name)) return;
+      var def = window.hljs && window.hljs.getLanguage(name);
+      add(name, fenceLanguageLabel(name), def && def.aliases, i + 1);
     });
-
     if (window.hljs && window.hljs.listLanguages) {
       window.hljs.listLanguages().slice().sort(function (a, b) {
         return fenceLanguageLabel(a).localeCompare(fenceLanguageLabel(b));
-      }).forEach(function (name) { add(name, fenceLanguageLabel(name)); });
+      }).forEach(function (name) {
+        var def = window.hljs.getLanguage(name);
+        add(name, fenceLanguageLabel(name), def && def.aliases, 999);
+      });
     }
+    FENCE_LANGS = entries;
+    return entries;
+  }
 
-    if (cur && !seen[cur]) add(cur, fenceLanguageLabel(cur));
-
-    return '<select class="md-fence-lang" contenteditable="false" tabindex="-1"' +
-      ' title="选择代码语言" aria-label="选择代码语言">' + opts.join('') + '</select>';
+  /** 代码块右上角的语言输入框；点开后在 body 上浮出可筛选列表 */
+  function fenceLanguageMarkup(current) {
+    var cur = String(current || '').toLowerCase();
+    return '<span class="md-fence-lang" contenteditable="false">' +
+      '<input class="md-fence-lang-input" type="text" value="' + escapeAttr(cur) + '"' +
+      ' placeholder="Plain text" title="输入或选择代码语言" aria-label="代码语言"' +
+      ' aria-haspopup="listbox" aria-expanded="false" autocomplete="off" spellcheck="false"' +
+      ' tabindex="-1"></span>';
   }
 
   function renderBlock(b) {
@@ -970,7 +996,7 @@
         return '<pre class="md-block md-fences" mdtype="fences" data-fences="' +
           escapeAttr(b.lang ? '```' + b.lang : '```') + '"' + cid + '>' +
           '<code class="language-' + escapeAttr(lang) + '">' + codeHTML + '</code>' +
-          fenceLanguageSelect(b.lang || '') + '</pre>';
+          fenceLanguageMarkup(b.lang || '') + '</pre>';
       }
 
       case 'hr':
@@ -1427,6 +1453,11 @@
     });
   })();
 
+  function fenceCurrentLang(pre) {
+    var fence = pre ? (pre.getAttribute('data-fences') || '```') : '```';
+    return fence.replace(/^```/, '').toLowerCase();
+  }
+
   /** 切换代码块语言：只改 fence 标记与高亮，不动代码正文 */
   function setFenceLanguage(pre, lang) {
     lang = String(lang || '').toLowerCase();
@@ -1450,17 +1481,238 @@
         code.textContent = text;
       }
     });
+
+    var input = pre.querySelector('.md-fence-lang-input');
+    if (input) input.value = lang;
     setEdited(true);
   }
 
-  write.addEventListener('change', function (e) {
-    var sel = e.target && e.target.closest ? e.target.closest('.md-fence-lang') : null;
-    if (!sel) return;
-    var pre = sel.closest('pre.md-fences');
-    if (pre) setFenceLanguage(pre, sel.value);
+  var FENCE_MENU = null;
+  var fenceMenuInput = null;
+  var fenceMenuActive = -1;
+
+  function ensureFenceMenu() {
+    if (FENCE_MENU) return FENCE_MENU;
+    FENCE_MENU = document.createElement('div');
+    FENCE_MENU.className = 'md-fence-lang-menu';
+    FENCE_MENU.setAttribute('role', 'listbox');
+    FENCE_MENU.hidden = true;
+    document.body.appendChild(FENCE_MENU);
+    FENCE_MENU.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    FENCE_MENU.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('button[data-lang]') : null;
+      if (!btn || !fenceMenuInput) return;
+      chooseFenceLanguage(fenceMenuInput, btn.getAttribute('data-lang'));
+    });
+    return FENCE_MENU;
+  }
+
+  function closeFenceMenu() {
+    if (FENCE_MENU) FENCE_MENU.hidden = true;
+    if (fenceMenuInput) fenceMenuInput.setAttribute('aria-expanded', 'false');
+    var wrap = fenceMenuInput && fenceMenuInput.closest ? fenceMenuInput.closest('.md-fence-lang') : null;
+    if (wrap) wrap.classList.remove('mf-open');
+    fenceMenuInput = null;
+    fenceMenuActive = -1;
+  }
+
+  function fenceQuickEntries(current) {
+    var entries = fenceLanguageEntries();
+    var out = entries.filter(function (e) { return e.rank === 0 || (e.rank > 0 && e.rank <= 14); });
+    if (current) {
+      var exists = out.some(function (e) { return e.value === current; });
+      if (!exists) {
+        var known = entries.filter(function (e) { return e.value === current; })[0];
+        out.unshift(known || { value: current, label: fenceLanguageLabel(current), rank: -1 });
+      }
+    }
+    return out.slice(0, 14);
+  }
+
+  function fenceFilteredEntries(query, current) {
+    var entries = fenceLanguageEntries();
+    var q = String(query || '').trim().toLowerCase();
+    if (!q) return fenceQuickEntries(current);
+
+    var scored = [];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (e.search.indexOf(q) < 0) continue;
+      var label = e.label.toLowerCase();
+      var score = e.value === q ? 0 :
+        e.value.indexOf(q) === 0 ? 1 :
+        label.indexOf(q) === 0 ? 2 : 3;
+      scored.push({ e: e, score: score });
+    }
+    scored.sort(function (a, b) {
+      if (a.score !== b.score) return a.score - b.score;
+      if (a.e.rank !== b.e.rank) return a.e.rank - b.e.rank;
+      return a.e.label.localeCompare(b.e.label);
+    });
+
+    var out = scored.slice(0, 24).map(function (x) { return x.e; });
+    // 允许写入未注册的语言名
+    if (/^[a-z0-9+#._-]+$/i.test(q) && !out.some(function (e) { return e.value === q; })) {
+      out.push({ value: q, label: '使用 “' + q + '”', rank: 999 });
+    }
+    return out;
+  }
+
+  function positionFenceMenu(input) {
+    var menu = ensureFenceMenu();
+    var r = input.getBoundingClientRect();
+    var width = 240, height = 256;
+    var top = r.bottom + 4;
+    if (top + height > window.innerHeight) top = Math.max(8, r.top - height - 4);
+    var left = Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8));
+    menu.style.width = width + 'px';
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  function renderFenceMenu(input, query) {
+    var menu = ensureFenceMenu();
+    var pre = input.closest('pre.md-fences');
+    var current = fenceCurrentLang(pre);
+    var entries = fenceFilteredEntries(query, current);
+    var html = '';
+
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      var cls = e.value === current ? ' mf-selected' : '';
+      var meta = e.value && e.label.toLowerCase() !== e.value ?
+        '<small>' + escapeHtml(e.value) + '</small>' : '';
+      html += '<button type="button" class="' + cls.trim() + '" data-lang="' +
+        escapeAttr(e.value) + '" role="option"><span>' + escapeHtml(e.label) + '</span>' +
+        meta + '</button>';
+    }
+    if (!query.trim()) html += '<div class="md-fence-lang-hint">输入以筛选全部语言</div>';
+    if (!entries.length) html += '<div class="md-fence-lang-hint">没有匹配的语言</div>';
+
+    menu.innerHTML = html;
+    menu.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    input.closest('.md-fence-lang').classList.add('mf-open');
+    fenceMenuInput = input;
+    fenceMenuActive = -1;
+    positionFenceMenu(input);
+  }
+
+  function moveFenceActive(delta) {
+    if (!FENCE_MENU || FENCE_MENU.hidden) return;
+    var btns = FENCE_MENU.querySelectorAll('button[data-lang]');
+    if (!btns.length) return;
+    fenceMenuActive = fenceMenuActive < 0
+      ? (delta > 0 ? 0 : btns.length - 1)
+      : (fenceMenuActive + delta + btns.length) % btns.length;
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('mf-active', i === fenceMenuActive);
+    btns[fenceMenuActive].scrollIntoView({ block: 'nearest' });
+  }
+
+  function resolveFenceLanguage(text) {
+    var raw = String(text || '').trim().toLowerCase();
+    if (!raw) return '';
+    var entries = fenceLanguageEntries();
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].value === raw) return entries[i].value;
+      if (entries[i].label.toLowerCase() === raw) return entries[i].value;
+    }
+    if (window.hljs && window.hljs.getLanguage(raw)) return raw;
+    for (var j = 0; j < entries.length; j++) {
+      if (entries[j].value.indexOf(raw) === 0 || entries[j].label.toLowerCase().indexOf(raw) === 0) {
+        return entries[j].value;
+      }
+    }
+    return raw;
+  }
+
+  function commitFenceInput(input) {
+    var pre = input.closest('pre.md-fences');
+    if (!pre) return;
+    var value = resolveFenceLanguage(input.value);
+    input.value = value;
+    if (value !== fenceCurrentLang(pre)) setFenceLanguage(pre, value);
+  }
+
+  function chooseFenceLanguage(input, value) {
+    var pre = input.closest('pre.md-fences');
+    if (!pre) return;
+    setFenceLanguage(pre, value);
+    input.value = value;
+    closeFenceMenu();
+  }
+
+  write.addEventListener('focusin', function (e) {
+    var input = e.target.closest ? e.target.closest('.md-fence-lang-input') : null;
+    if (!input) return;
+    input.select();
+    renderFenceMenu(input, '');
+  });
+
+  write.addEventListener('input', function (e) {
+    var input = e.target.closest ? e.target.closest('.md-fence-lang-input') : null;
+    if (!input) return;
+    renderFenceMenu(input, input.value);
+  });
+
+  write.addEventListener('keydown', function (e) {
+    var input = e.target.closest ? e.target.closest('.md-fence-lang-input') : null;
+    if (!input) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!FENCE_MENU || FENCE_MENU.hidden) renderFenceMenu(input, '');
+      moveFenceActive(e.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (FENCE_MENU && !FENCE_MENU.hidden && fenceMenuActive >= 0) {
+        var btn = FENCE_MENU.querySelectorAll('button[data-lang]')[fenceMenuActive];
+        if (btn) { chooseFenceLanguage(input, btn.getAttribute('data-lang')); return; }
+      }
+      commitFenceInput(input);
+      closeFenceMenu();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      var pre = input.closest('pre.md-fences');
+      input.value = fenceCurrentLang(pre);
+      closeFenceMenu();
+    }
+  });
+
+  write.addEventListener('focusout', function (e) {
+    var input = e.target.closest ? e.target.closest('.md-fence-lang-input') : null;
+    if (!input) return;
+    setTimeout(function () {
+      if (!input.isConnected || document.activeElement === input) return;
+      if (FENCE_MENU && FENCE_MENU.contains(document.activeElement)) return;
+      commitFenceInput(input);
+      closeFenceMenu();
+    }, 120);
+  });
+
+  document.addEventListener('mousedown', function (e) {
+    if (!FENCE_MENU || FENCE_MENU.hidden) return;
+    if (FENCE_MENU.contains(e.target)) return;
+    if (fenceMenuInput && fenceMenuInput.contains(e.target)) return;
+    closeFenceMenu();
+  });
+
+  document.addEventListener('scroll', function (e) {
+    if (!FENCE_MENU || FENCE_MENU.hidden) return;
+    if (FENCE_MENU.contains(e.target)) return;   // 菜单自身滚动不关闭
+    closeFenceMenu();
+  }, true);
+
+  window.addEventListener('resize', function () {
+    if (FENCE_MENU && !FENCE_MENU.hidden) closeFenceMenu();
   });
 
   function renderDoc() {
+    closeFenceMenu();
     write.innerHTML = doc.map(renderBlock).join('');
     padEmpties();
     refreshFootnotes();
