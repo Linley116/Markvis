@@ -7,6 +7,14 @@
 
 ---
 
+## v0.14.7 — 2026-10-27
+
+**fix: keep blank-line-separated details blocks intact through the HTML block parser**
+
+- 提交：[19168bb](https://github.com/Linley116/Markvis/commit/19168bb23283ce194327e398f0b1be52f35398c3)
+- details 里条目之间有空行时，CommonMark 的「空行结束 HTML 块」规则把列表切到 details 外面：预览 iframe 只剩 summary（内容 27px、iframe 高 150px，留出一大段空白），列表变成编辑器自己的块，`</details>` 又多出一个空块
+  - 修法：`htmlBlockStart` 对 `<details>` 改成吞到闭合标签为止（与 script/pre 同类）；summary 后带空行分隔的 Markdown 整体进 iframe 与导出，间距恢复正常。新增 4 项引擎断言（整块解析、源码保留、间距正常、往返与导出无损）
+
 ## v0.14.6 — 2026-10-27
 
 **feat: render Markdown inside details/summary blocks**
