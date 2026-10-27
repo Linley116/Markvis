@@ -30,6 +30,9 @@ jobs:
       - name: Install isolated test browser
         run: npx playwright-core install chromium
 
+      - name: Check changelog is in sync
+        run: node scripts/gen-changelog.js --check
+
       - name: Run native XCTest suite
         run: |
           set +e
