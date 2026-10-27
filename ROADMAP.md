@@ -1,7 +1,7 @@
 # Markvis 路线图
 
-> **基线 v0.14.6** · 14,222 行（engine 4,420 / html2md 311 / css 1,626 / features 2,549 / Swift 2,555 / tests 2,761）
-> **272 项 JS 断言全绿**（引擎 141 + 功能 131）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.9 MB / DMG 1.7 MB
+> **基线 v0.14.7** · 14,039 行（engine 4,428 / html2md 311 / css 1,626 / features 2,549 / Swift 2,555 / tests 2,570）
+> **276 项 JS 断言全绿**（引擎 145 + 功能 131）+ 7 组原生 Swift 测试 + PDF 内容回归 · 应用 3.9 MB / DMG 1.7 MB
 > **CI 为手动触发**：日常 push / PR 不自动跑；需要完整验证时在 Actions → CI → Run workflow。
 > 仓库：<https://github.com/Linley116/Markvis>
 
@@ -29,6 +29,7 @@
 | ✅   | **14** | 大纲层级           | 标题按层级建树，二级/三级可折叠，折叠状态跨重建保留                                                         | 已完成                                                  |
 | ✅ | **15** | 代码块语言 | 实时模式右上角语言输入，输入字符筛选并选择，写回 fence 并重新高亮 | 已完成 |
 | ✅ | **16** | details 渲染 | details 里直接跟的 Markdown 解析为列表/标题，预览与导出展开 | 已完成 |
+| ✅ | **17** | details 空行 | 条目之间有空行时 details 不再被空行规则切断，整体吞到 `</details>` | 已完成 |
 
 > 排期变更：第 3 轮原计划是 `F5`/`F6`/`T1`，实际先做了 PDF 重做与开源，这三项分别落到第 5、6 轮。
 
@@ -103,6 +104,7 @@
 | v0.14.4 | 实时模式的代码块只能看高亮结果，不能像 Typora 一样点选语言；源码模式补全不算 | 在 `pre.md-fences` 右上角加语言下拉：`Plain text` + 常用语言 + highlight.js 全部注册语言，按当前语言选中，未注册语言保留为选项。切换时更新 `data-fences`、`code.language-*` 并重新高亮，代码正文不变；走 `programEdit` 可撤销。`blockRaw` 只读 `code.textContent`，下拉不进入 Markdown；导出/打印前移除控件，搜索跳过下拉。新增 3 项引擎断言（下拉存在、切换写回并高亮、导出无控件） |
 | v0.14.5 | v0.14.4 的语言选择是原生 select，重复出现 `Plain text` / `plaintext`，且一次列出全部语言；没有输入筛选 | 改成右上角语言输入 + body 浮层：默认列常用语言，输入按 value / 显示名 / aliases 匹配，↑↓/Enter/Esc/点击操作；按 value 与显示名双重去重（跳过 plaintext/text/txt），未注册语言可手动写入。切换仍走 `programEdit`，`blockRaw` 只读 `code`，导出/打印/搜索排除控件。浮层挂 body，不受代码块 `overflow` 裁切；菜单自身滚动不关闭。新增 5 项引擎断言 |
 | v0.14.6 | `<details><summary>` 后面直接跟 Markdown 列表时，列表行被浏览器折成一段，粗体/行内代码也不生效 | 预览与导出时把 `summary` 后的直接 Markdown 文本解析成普通 HTML：块级支持段落/标题/列表/引用/代码，行内支持 strong/em/del/code/link/image；`data-html` 原样保留，编辑浮层仍写回源码。预览默认展开，导出/PDF 也展开内容。新增 3 项引擎断言（源码保留、Markdown 解析、导出展开） |
+| v0.14.7 | details 里条目之间有空行时，CommonMark 的「空行结束 HTML 块」规则把列表切到 details 外面：预览 iframe 只剩 summary（内容 27px、iframe 高 150px，留出一大段空白），列表变成编辑器自己的块，`</details>` 又多出一个空块 | `htmlBlockStart` 对 `<details>` 改成吞到闭合标签为止（与 script/pre 同类）；summary 后带空行分隔的 Markdown 整体进 iframe 与导出，间距恢复正常。新增 4 项引擎断言（整块解析、源码保留、间距正常、往返与导出无损） |
 
 ---
 

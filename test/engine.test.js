@@ -1032,6 +1032,53 @@ function check(name, cond, extra) {
         /<strong>LiveHub<\/strong>/.test(detailsMd.exported),
         JSON.stringify(detailsMd.exported.slice(0, 240)));
 
+  // 真实文件里条目之间常有空行：CommonMark 的「空行结束 HTML 块」会把列表
+  // 切到 details 外面（列表变成编辑器块、iframe 只剩 summary 且高度虚高）。
+  // details 必须吞到 </details> 为止。
+  const detailsBlank = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = '<details>\n<summary>历史说明</summary>\n\n' +
+      '- 主播目录和观看流程由 LiveHub 提供\n\n' +
+      '- 弹幕读取由 `server/danmaku/` 下的连接器实现\n' +
+      '</details>\n\n主播库保存在本地。';
+    window.__loadContent('', src, 'details-blank.md');
+    await wait(450);
+    const el = document.querySelector('[mdtype="html_block"]');
+    const frame = el && el.querySelector('iframe.md-html-frame');
+    const doc = frame && frame.contentDocument;
+    const det = doc && doc.querySelector('details');
+    return {
+      blocks: Array.from(document.getElementById('write').children)
+        .map(k => k.getAttribute('mdtype')),
+      raw: el ? el.getAttribute('data-html') : '',
+      preview: frame ? frame.srcdoc : '',
+      detKids: det ? Array.from(det.childNodes).map(n => n.nodeType === 3 ? '#text' : n.tagName) : [],
+      gap: (det && det.querySelector('summary') && det.querySelector('ul'))
+        ? Math.round(det.querySelector('ul').getBoundingClientRect().top -
+                     det.querySelector('summary').getBoundingClientRect().bottom) : -1,
+      frameH: frame ? Math.round(frame.getBoundingClientRect().height) : 0,
+      md: window.__getMarkdown(),
+      exported: window.__buildExportHTML()
+    };
+  });
+  check('空行分隔的 details 整块解析（列表不落到块外）',
+        detailsBlank.blocks.filter(t => t === 'html_block').length === 1 &&
+        !detailsBlank.blocks.includes('list'),
+        JSON.stringify(detailsBlank.blocks));
+  check('空行 details 源码原样保留',
+        detailsBlank.raw.includes('<summary>历史说明</summary>') &&
+        detailsBlank.raw.includes('- 主播目录') && detailsBlank.raw.includes('</details>'),
+        JSON.stringify(detailsBlank.raw.slice(0, 120)));
+  check('空行 details 列表在 iframe 内且间距正常',
+        detailsBlank.detKids.includes('UL') && detailsBlank.gap >= 0 && detailsBlank.gap < 40 &&
+        detailsBlank.frameH > 60,
+        JSON.stringify({ kids: detailsBlank.detKids, gap: detailsBlank.gap, frameH: detailsBlank.frameH }));
+  check('空行 details 往返与导出无损',
+        detailsBlank.md.includes('- 主播目录') && detailsBlank.md.includes('</details>') &&
+        /主播库保存在本地/.test(detailsBlank.md) &&
+        /<details[\s>]/.test(detailsBlank.exported) && /<ul/.test(detailsBlank.exported),
+        JSON.stringify(detailsBlank.md.slice(0, 160)));
+
   const hbEdit = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     // details 用例换了当前文档；编辑浮层测试重新加载普通 HTML 块

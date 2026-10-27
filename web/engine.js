@@ -336,7 +336,15 @@
     if (raw) return { kind: 'until', end: new RegExp('</' + raw[1] + '\\s*>', 'i') };
 
     var tag = /^<\/?([A-Za-z][\w-]*)(?=\s|\/?>|$)/.exec(s);
-    if (tag && HTML_BLOCK_TAGS[tag[1].toLowerCase()]) return { kind: 'blank' };
+    if (tag && HTML_BLOCK_TAGS[tag[1].toLowerCase()]) {
+      // details 是配对容器，里面的 Markdown 常用空行分隔条目；
+      // 按空行结束会把 summary 后的内容切出去（列表掉到 details 外），
+      // 所以改成吞到闭合标签为止，与 script/pre 同类。
+      if (tag[1].toLowerCase() === 'details' && s.charAt(1) !== '/') {
+        return { kind: 'until', end: /<\/details\s*>/i };
+      }
+      return { kind: 'blank' };
+    }
     return null;
   }
 
