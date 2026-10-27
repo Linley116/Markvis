@@ -1,8 +1,9 @@
 name: Release
 
 # 版本变动信息落到 GitHub Releases：
-#   - 维护者把新版本写进 scripts/versions.json 并打 v* tag 推上来 → 发布该版本
+#   - 维护者把新版本写进 scripts/versions.json，打 v* tag 推上来 → 发布该版本
 #   - 版本清单/发布脚本有改动推到 main → 补齐历史里还没有 Release 的版本（幂等）
+#   - 也可以在 Actions 页面手动 Run workflow，指定版本或补齐全部
 #   - 日常 push / PR 不触发；本工作流只做发布，不跑 CI
 on:
   push:
@@ -42,16 +43,6 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-
-      # 脚本要 git push tag，显式把 token 写进 remote URL
-      - name: Configure git credentials
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git remote set-url origin \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Regenerate changelog
         run: node scripts/gen-changelog.js

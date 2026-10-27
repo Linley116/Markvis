@@ -2,18 +2,21 @@
 // 发布 GitHub Release：把 scripts/versions.json 里的每个版本做成一条 Release，
 // 发布说明取自 CHANGELOG.md 对应小节。
 //
-//   node scripts/publish-release.js               # 发布所有缺失的版本（自动补 tag）
+//   node scripts/publish-release.js               # 发布所有缺失的版本
 //   node scripts/publish-release.js v0.14.6       # 只发布指定版本
 //   node scripts/publish-release.js --dry-run     # 只打印将要做什么
 //
+// 前提：对应的 v* tag 必须已经推到远端（`git tag vX.Y.Z && git push origin --tags`）。
+// 脚本只建 Release、不碰 tag —— GitHub 在建 Release 时若发现 tag 不存在，会把 tag
+// 自动建到默认分支 HEAD，导致历史版本的 tag 指错提交。
+//
 // 鉴权：环境变量 GITHUB_TOKEN（CI 里用 secrets.GITHUB_TOKEN / ${{ github.token }}）。
-// 幂等：已存在的 tag 与 Release 会跳过，重复执行安全。
-// 容错：单个版本失败（例如被 GitHub 二次限流）不会中断整批，失败清单最后统一报出。
+// 幂等：已存在的 Release 会跳过，重复执行安全。
+// 容错：单个版本失败不会中断整批，失败清单最后统一报出。
 
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const VERSIONS_FILE = path.join(ROOT, 'scripts', 'versions.json');
@@ -94,7 +97,8 @@ async function apiWithRetry(method, apiPath, body) {
       return await api(method, apiPath, body);
     } catch (err) {
       lastError = err;
-      const retryable = /→ (403|429|500|502|503|504):/.test(err.message) || /secondary rate limit|timeout|ECONNRESET/i.test(err.message);
+      const retryable = /→ (403|429|500|502|503|504):/.test(err.message)
+        || /secondary rate limit|timeout|ECONNRESET/i.test(err.message);
       if (!retryable || attempt === MAX_ATTEMPTS) break;
       const wait = BASE_DELAY_MS * 2 ** (attempt - 1);
       console.log(`  · ${method} ${apiPath} 失败（第 ${attempt} 次），${wait}ms 后重试`);
@@ -119,54 +123,27 @@ function changelogSection(version) {
   return out.join('\n').trim();
 }
 
-// tag 对齐：确保远端 tag 指向 versions.json 里记录的提交。
-// GitHub 在创建 Release 时若发现 tag 不存在，会自动把 tag 建到默认分支 HEAD；
-// 所以这里必须先把 tag 校准，再建 Release。
-async function reconcileTag(entry) {
-  const { version, commit } = entry;
-  const expected = execFileSync('git', ['rev-parse', commit], { cwd: ROOT, encoding: 'utf8' }).trim();
-
-  const ref = await apiWithRetry('GET', `/git/ref/tags/${version}`).catch(() => null);
-  if (ref && ref.status === 200) {
-    const obj = ref.data.object;
-    // 附注 tag 的 object 是 tag 对象，需要再解一层拿到提交
-    let sha = obj.sha;
-    if (obj.type === 'tag') {
-      const peeled = await apiWithRetry('GET', `/git/tags/${sha}`).catch(() => null);
-      if (peeled && peeled.status === 200) sha = peeled.data.object.sha;
-    }
-    if (sha === expected) return { changed: false, sha };
-
-    const res = await apiWithRetry('PATCH', `/git/refs/tags/${version}`, JSON.stringify({ sha: expected, force: true }));
-    console.log(`  · 校正 tag ${version} → ${expected.slice(0, 7)}`);
-    return { changed: true, sha: res.data.object.sha };
-  }
-
-  const res = await apiWithRetry('POST', '/git/refs', JSON.stringify({
-    ref: `refs/tags/${version}`,
-    sha: expected,
-  }));
-  console.log(`  · 创建 tag ${version} → ${expected.slice(0, 7)}`);
-  return { changed: true, sha: res.data.object.sha };
-}
-
 async function releaseExists(version) {
   const res = await apiWithRetry('GET', `/releases/tags/${version}`).catch(() => null);
   return res && res.status === 200 ? res.data : null;
 }
 
+async function tagExists(version) {
+  const res = await apiWithRetry('GET', `/git/ref/tags/${version}`).catch(() => null);
+  return !!(res && res.status === 200);
+}
+
 async function publishOne(entry, isLatest) {
   const { version } = entry;
 
-  // 先把 tag 校准到版本提交，再建 Release。
-  // GitHub 在建 Release 时若发现 tag 不存在，会把 tag 自动建到默认分支 HEAD；
-  // 所以这一步必须先做，否则历史版本的 tag 会指错提交。
-  await reconcileTag(entry);
-
-  const existing = await releaseExists(version);
-  if (existing) {
+  if (await releaseExists(version)) {
     console.log(`· ${version} 已存在 Release，跳过`);
     return false;
+  }
+
+  // tag 必须先由维护者推到远端；否则 GitHub 会把 tag 自动建到默认分支 HEAD
+  if (!(await tagExists(version))) {
+    throw new Error(`远端没有 tag ${version}，请先 git tag ${version} && git push origin ${version}`);
   }
 
   const section = changelogSection(version);

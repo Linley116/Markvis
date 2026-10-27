@@ -227,6 +227,8 @@ git tag v0.14.7 && git push origin main --tags
 
 Pushing the `v*` tag triggers `.github/workflows/release.yml`, which creates the GitHub Release (and backfills any older version that still has none). It uses the built-in `GITHUB_TOKEN`, so no extra secret is needed.
 
+> The tag must be pushed by the maintainer **before** the release runs: if GitHub creates a Release for a tag that does not exist yet, it points that tag at the default branch HEAD, so historical versions would end up on the wrong commit. The workflow therefore only creates releases — it never moves tags.
+
 ### License
 
 MIT — see [LICENSE](LICENSE) (third-party notices included).

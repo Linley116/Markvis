@@ -228,6 +228,8 @@ git tag v0.14.7 && git push origin main --tags
 
 推 `v*` tag 会触发 `.github/workflows/release.yml`，自动创建对应的 GitHub Release，并把历史里还没有 Release 的版本一并补齐。发布用的是内置的 `GITHUB_TOKEN`，不需要额外配置密钥。
 
+> tag 必须**先由维护者推到远端**：GitHub 在建 Release 时若发现 tag 不存在，会把 tag 自动建到默认分支 HEAD，历史版本的 tag 就会指错提交。所以工作流只建 Release，不动 tag。
+
 ### 许可证
 
 MIT，见 [LICENSE](LICENSE)（含第三方声明）。
