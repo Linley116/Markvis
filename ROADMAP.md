@@ -168,7 +168,13 @@ PDF 回归原来 `sleep 14`，本机够用，CI 上文件还没写完就判失�
 2. ✅ GitHub Actions 可手动触发（`.github/workflows/ci.yml`，macOS 15 runner 上构建 + 四套验证）。2026-10-25 起取消 push / PR 自动触发，日常提交不跑 CI。
 3. ✅ `F16` 决策完成：不公证，对外只提供源码；`release.sh` 的 DMG 不对外发布。
 4. 仓库描述已设置；Topics 为可选项，不影响源码构建。
+5. ✅ 版本发布线（2026-10-27 建立）：每个版本都是一条 GitHub Release，发布说明取自 `CHANGELOG.md`。清单在 `scripts/versions.json`（版本 → commit），`node scripts/gen-changelog.js` 生成 CHANGELOG，`node scripts/publish-release.js` 建 Release。
 
 > **发布策略（2026-10-24）**：不做 Apple 公证分发。个人开发者证书会把法定姓名和 Team ID 写进签名，公开下载还会让用户面对 Gatekeeper；因此 README 只引导从源码构建，DMG 脚本留在维护者侧。
 
 > **CI 策略（2026-10-25）**：日常 push / PR 不自动跑 CI，避免每次提交都等 Actions；workflow 保留 `workflow_dispatch`，需要完整验证时手动触发。日常改动以本地 `npm test` + `test/pdf-regression.sh` 为准。
+
+> **发版流程（2026-10-27）**：升 `Info.plist` + `package.json` 版本号 → 把新版本连同发布提交写进 `scripts/versions.json` → `node scripts/gen-changelog.js` → 提交 → `git tag vX.Y.Z && git push origin main --tags`。推 tag 触发 `.github/workflows/release.yml`（`contents: write` + 内置 `GITHUB_TOKEN`，无需额外密钥），自动建 Release 并补齐历史缺失版本。
+>
+> **踩坑：GitHub 建 Release 时若 tag 不存在，会把 tag 自动建到默认分支 HEAD**——历史版本（v0.11.0–v0.13.0）第一次批量发布时 tag 全落到了 HEAD。修法：工作流只建 Release、**不碰 tag**，tag 一律由维护者本地 `git push` 先推好（提交必须正确指向版本提交）；脚本另外加了「远端没有该 tag 就报错退出」的检查。
+
