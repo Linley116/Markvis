@@ -210,6 +210,24 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 见 [ROADMAP.md](ROADMAP.md) —— 迭代排期是一张带勾选列的表，后面跟着按版本整理的修复记录、暂缓项和踩坑记录。对外分发采用源码构建，不做 Apple 公证；增量落盘经评估后暂缓、不再排期。
 
+### 版本发布（Releases）
+
+每个版本都会作为 GitHub Release 发布，并带上该版本的改动说明：<https://github.com/Linley116/Markvis/releases>
+
+[CHANGELOG.md](CHANGELOG.md) 是完整的按版本历史，由 `scripts/versions.json` 和路线图的修复记录生成，**不要手工编辑**。
+
+发版流程：
+
+```bash
+# 1. 先在 Info.plist + package.json 里升版本号，再把这次发布的提交记进清单
+echo '{ "version": "v0.14.7", "commit": "<sha>" }' >> scripts/versions.json   # 记得保持有序
+node scripts/gen-changelog.js        # 重新生成 CHANGELOG.md
+git commit -am "release: v0.14.7"
+git tag v0.14.7 && git push origin main --tags
+```
+
+推 `v*` tag 会触发 `.github/workflows/release.yml`，自动创建对应的 GitHub Release，并把历史里还没有 Release 的版本一并补齐。发布用的是内置的 `GITHUB_TOKEN`，不需要额外配置密钥。
+
 ### 许可证
 
 MIT，见 [LICENSE](LICENSE)（含第三方声明）。

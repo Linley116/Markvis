@@ -1,0 +1,53 @@
+name: Release
+
+# 版本变动信息落到 GitHub Releases。
+#   - 维护者把新版本写进 scripts/versions.json，打 v* tag 推上来 → 发布该版本，
+#     并顺带补齐历史里还没有 Release 的版本（幂等，可重复执行）
+#   - 也可以在 Actions 页面手动 Run workflow，指定版本或补齐全部
+#   - 日常 push / PR 不触发；本工作流只做发布，不跑 CI
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '只发布指定版本（留空则补齐所有缺失版本）'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Regenerate changelog
+        run: node scripts/gen-changelog.js
+
+      - name: Publish releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          INPUT_VERSION: ${{ inputs.version }}
+          PUSHED_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            node scripts/publish-release.js "$INPUT_VERSION"
+          else
+            node scripts/publish-release.js
+          fi

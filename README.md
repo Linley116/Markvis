@@ -209,6 +209,24 @@ The JS suites drive real DOM in headless Chrome (`playwright-core` is the only d
 
 See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check column, followed by the versioned fix log, deferred items, and the engineering notes behind the tricky parts. Distribution is source-only with no Apple notarization; incremental save is deferred and no longer scheduled.
 
+### Releases
+
+Every version is published as a GitHub Release with its change notes: <https://github.com/Linley116/Markvis/releases>
+
+[CHANGELOG.md](CHANGELOG.md) is the full, per-version history (generated from `scripts/versions.json` and the ROADMAP fix log — do not edit it by hand).
+
+To cut a release:
+
+```bash
+# 1. bump the version in Info.plist + package.json, then record the release commit
+echo '{ "version": "v0.14.7", "commit": "<sha>" }' >> scripts/versions.json   # keep the list sorted
+node scripts/gen-changelog.js        # regenerate CHANGELOG.md
+git commit -am "release: v0.14.7"
+git tag v0.14.7 && git push origin main --tags
+```
+
+Pushing the `v*` tag triggers `.github/workflows/release.yml`, which creates the GitHub Release (and backfills any older version that still has none). It uses the built-in `GITHUB_TOKEN`, so no extra secret is needed.
+
 ### License
 
 MIT — see [LICENSE](LICENSE) (third-party notices included).

@@ -9,7 +9,10 @@
     "test:features": "node test/features.test.js",
     "test:native": "./test/native.sh",
     "test:pdf": "./test/pdf-regression.sh",
-    "test:browser:install": "playwright-core install chromium"
+    "test:browser:install": "playwright-core install chromium",
+    "changelog": "node scripts/gen-changelog.js",
+    "changelog:check": "node scripts/gen-changelog.js --check",
+    "release:publish": "node scripts/publish-release.js"
   },
   "devDependencies": {
     "playwright-core": "1.58.2"
