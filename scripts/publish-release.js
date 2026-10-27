@@ -8,10 +8,12 @@
 //
 // 鉴权：环境变量 GITHUB_TOKEN（CI 里用 secrets.GITHUB_TOKEN / ${{ github.token }}）。
 // 幂等：已存在的 tag 与 Release 会跳过，重复执行安全。
+// 容错：单个版本失败（例如被 GitHub 二次限流）不会中断整批，失败清单最后统一报出。
 
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const VERSIONS_FILE = path.join(ROOT, 'scripts', 'versions.json');
@@ -20,6 +22,13 @@ const CHANGELOG_FILE = path.join(ROOT, 'CHANGELOG.md');
 const TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '';
 const REPO = process.env.GITHUB_REPOSITORY || 'Linley116/Markvis';
 const DRY_RUN = process.argv.includes('--dry-run');
+
+const MAX_ATTEMPTS = 5;
+const BASE_DELAY_MS = 1500;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function versionKey(v) {
   return v
@@ -77,6 +86,24 @@ function api(method, apiPath, body) {
   });
 }
 
+// 限流 / 服务端抖动时退避重试
+async function apiWithRetry(method, apiPath, body) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await api(method, apiPath, body);
+    } catch (err) {
+      lastError = err;
+      const retryable = /→ (403|429|500|502|503|504):/.test(err.message) || /secondary rate limit|timeout|ECONNRESET/i.test(err.message);
+      if (!retryable || attempt === MAX_ATTEMPTS) break;
+      const wait = BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.log(`  · ${method} ${apiPath} 失败（第 ${attempt} 次），${wait}ms 后重试`);
+      await sleep(wait);
+    }
+  }
+  throw lastError;
+}
+
 // 从 CHANGELOG.md 里截出某个版本的小节正文
 function changelogSection(version) {
   if (!fs.existsSync(CHANGELOG_FILE)) return '';
@@ -92,34 +119,47 @@ function changelogSection(version) {
   return out.join('\n').trim();
 }
 
-async function ensureTag(version, shortSha) {
-  const ref = await api('GET', `/git/ref/tags/${version}`).catch(() => null);
-  if (ref && ref.status === 200) return ref.data.object;
-  if (DRY_RUN) return `dry-run:${shortSha}`;
+// 打 tag：一次 git push 推全部缺失的 tag，避免逐个走 API 触发 GitHub 的二次限流
+async function ensureTags(entries) {
+  const remote = new Set(
+    execFileSync('git', ['ls-remote', '--tags', 'origin'], { cwd: ROOT, encoding: 'utf8' })
+      .split('\n')
+      .map((line) => line.split('refs/tags/')[1])
+      .filter(Boolean)
+      .map((name) => name.replace(/\^\{\}$/, ''))
+  );
 
-  const commit = await api('GET', `/commits/${shortSha}`);
-  const res = await api('POST', '/git/refs', JSON.stringify({
-    ref: `refs/tags/${version}`,
-    sha: commit.data.sha,
-  }));
-  console.log(`  · 创建 tag ${version} → ${commit.data.sha.slice(0, 7)}`);
-  return res.data.object;
+  const missing = [];
+  for (const entry of entries) {
+    if (remote.has(entry.version)) continue;
+    const full = execFileSync('git', ['rev-parse', entry.commit], { cwd: ROOT, encoding: 'utf8' }).trim();
+    if (!DRY_RUN) {
+      execFileSync('git', ['tag', '-f', entry.version, full], { cwd: ROOT, encoding: 'utf8' });
+    }
+    missing.push(entry.version);
+  }
+
+  if (!missing.length) return;
+  if (DRY_RUN) {
+    console.log(`· [dry-run] 将推送 ${missing.length} 个 tag：${missing.join(', ')}`);
+    return;
+  }
+  console.log(`· 推送 ${missing.length} 个 tag：${missing.join(', ')}`);
+  execFileSync('git', ['push', 'origin', '--tags'], { cwd: ROOT, encoding: 'utf8' });
 }
 
 async function releaseExists(version) {
-  const res = await api('GET', `/releases/tags/${version}`).catch(() => null);
+  const res = await apiWithRetry('GET', `/releases/tags/${version}`).catch(() => null);
   return res && res.status === 200 ? res.data : null;
 }
 
 async function publishOne(entry, isLatest) {
-  const { version, commit } = entry;
+  const { version } = entry;
   const existing = await releaseExists(version);
   if (existing) {
     console.log(`· ${version} 已存在 Release，跳过`);
     return false;
   }
-
-  await ensureTag(version, commit);
 
   const section = changelogSection(version);
   const footer = [
@@ -137,7 +177,7 @@ async function publishOne(entry, isLatest) {
   }
 
   try {
-    const res = await api('POST', '/releases', JSON.stringify({
+    const res = await apiWithRetry('POST', '/releases', JSON.stringify({
       tag_name: version,
       name: `Markvis ${version}`,
       body,
@@ -166,17 +206,41 @@ async function main() {
   const only = process.argv.slice(2).filter((a) => /^v\d/.test(a));
   const all = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf8')).sort((a, b) => compareVersions(a.version, b.version));
   const targets = only.length ? all.filter((e) => only.includes(e.version)) : all;
+
   if (!targets.length) {
     console.error('没有匹配的版本');
     process.exit(1);
   }
 
   const newest = all[all.length - 1].version;
+  const failures = [];
   let created = 0;
-  for (const entry of targets) {
-    if (await publishOne(entry, entry.version === newest)) created += 1;
+
+  // 先把所有缺失的 tag 一次性推上去（一次 push，避免逐个调 API 触发二次限流）
+  try {
+    await ensureTags(targets);
+  } catch (err) {
+    console.error(`✗ 推送 tag 失败：${err.message}`);
+    failures.push(`tag push: ${err.message}`);
   }
+
+  for (const entry of targets) {
+    try {
+      if (await publishOne(entry, entry.version === newest)) created += 1;
+    } catch (err) {
+      console.error(`✗ ${entry.version} 发布失败：${err.message}`);
+      failures.push(`${entry.version}: ${err.message}`);
+    }
+    // 拉一点间隔，避免触发 GitHub 的二次限流
+    await sleep(600);
+  }
+
   console.log(`完成：新建 ${created} 条 Release，共处理 ${targets.length} 个版本`);
+  if (failures.length) {
+    console.error(`失败 ${failures.length} 个版本：`);
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {
