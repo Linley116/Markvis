@@ -212,21 +212,21 @@ JS 套件用无头 Chrome 驱动真实 DOM（`playwright-core` 是唯一的开�
 
 ### 版本发布（Releases）
 
-每个版本都会作为 GitHub Release 发布，并带上该版本的改动说明：<https://github.com/Linley116/Markvis/releases>
+GitHub Release 只在**大版本升级**（v0.15、v0.16 这种 minor 变化）时发布；patch 版本（v0.15.1 这种）只打 tag，不发 Release —— 中间过程的变更由下一条大版本 Release 统一描述：每条 Release 覆盖「自上一条 Release 以来的全部变更」。页面见 <https://github.com/Linley116/Markvis/releases>
 
-[CHANGELOG.md](CHANGELOG.md) 是完整的按版本历史，由 `scripts/versions.json` 和路线图的修复记录生成，**不要手工编辑**。
+[CHANGELOG.md](CHANGELOG.md) 是完整的按版本历史（含每个 patch），由 `scripts/versions.json` 和路线图的修复记录生成，**不要手工编辑**。
 
 发版流程：
 
 ```bash
 # 1. 先在 Info.plist + package.json 里升版本号，再把这次发布的提交记进清单
-echo '{ "version": "v0.14.7", "commit": "<sha>" }' >> scripts/versions.json   # 记得保持有序
+echo '{ "version": "v0.15.0", "commit": "<sha>" }' >> scripts/versions.json   # 记得保持有序
 node scripts/gen-changelog.js        # 重新生成 CHANGELOG.md
-git commit -am "release: v0.14.7"
-git tag v0.14.7 && git push origin main --tags
+git commit -am "release: v0.15.0"
+git tag v0.15.0 && git push origin main --tags
 ```
 
-推 `v*` tag 会触发 `.github/workflows/release.yml`，自动创建对应的 GitHub Release，并把历史里还没有 Release 的版本一并补齐。发布用的是内置的 `GITHUB_TOKEN`，不需要额外配置密钥。
+推 `v*` tag 会触发 `.github/workflows/release.yml`：大版本自动创建 Release（并补齐历史缺失的大版本），patch 版本自动跳过。发布用的是内置的 `GITHUB_TOKEN`，不需要额外配置密钥。
 
 > tag 必须**先由维护者推到远端**：GitHub 在建 Release 时若发现 tag 不存在，会把 tag 自动建到默认分支 HEAD，历史版本的 tag 就会指错提交。所以工作流只建 Release，不动 tag。
 

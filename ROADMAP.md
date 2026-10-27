@@ -178,5 +178,7 @@ PDF 回归原来 `sleep 14`，本机够用，CI 上文件还没写完就判失�
 
 > **发版流程（2026-10-27）**：升 `Info.plist` + `package.json` 版本号 → 把新版本连同发布提交写进 `scripts/versions.json` → `node scripts/gen-changelog.js` → 提交 → `git tag vX.Y.Z && git push origin main --tags`。推 tag 触发 `.github/workflows/release.yml`（`contents: write` + 内置 `GITHUB_TOKEN`，无需额外密钥），自动建 Release 并补齐历史缺失版本。
 >
+> **Release 节奏（2026-10-27 起）**：只有 minor 升级（v0.15、v0.16 这种）发 Release；patch 版本（v0.15.1 这种）只打 tag 不发，中间过程的变更由下一条大版本 Release 统一描述——每条 Release 覆盖「自上一条 Release 以来的全部变更」。历史已发布的逐版本 Release 保留不动。
+>
 > **踩坑：GitHub 建 Release 时若 tag 不存在，会把 tag 自动建到默认分支 HEAD**——历史版本（v0.11.0–v0.13.0）第一次批量发布时 tag 全落到了 HEAD。修法：工作流只建 Release、**不碰 tag**，tag 一律由维护者本地 `git push` 先推好（提交必须正确指向版本提交）；脚本另外加了「远端没有该 tag 就报错退出」的检查。
 

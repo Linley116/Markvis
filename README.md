@@ -211,21 +211,21 @@ See [ROADMAP.md](ROADMAP.md) — iterations are listed as a table with a check c
 
 ### Releases
 
-Every version is published as a GitHub Release with its change notes: <https://github.com/Linley116/Markvis/releases>
+GitHub Releases are published only for **major/minor upgrades** (v0.15, v0.16, …). Patch versions (v0.15.1, …) get a tag only — their changes are folded into the next minor release, so each Release covers everything since the previous one: <https://github.com/Linley116/Markvis/releases>
 
-[CHANGELOG.md](CHANGELOG.md) is the full, per-version history (generated from `scripts/versions.json` and the ROADMAP fix log — do not edit it by hand).
+[CHANGELOG.md](CHANGELOG.md) is the full, per-version history (patches included; generated from `scripts/versions.json` and the ROADMAP fix log — do not edit it by hand).
 
 To cut a release:
 
 ```bash
 # 1. bump the version in Info.plist + package.json, then record the release commit
-echo '{ "version": "v0.14.7", "commit": "<sha>" }' >> scripts/versions.json   # keep the list sorted
+echo '{ "version": "v0.15.0", "commit": "<sha>" }' >> scripts/versions.json   # keep the list sorted
 node scripts/gen-changelog.js        # regenerate CHANGELOG.md
-git commit -am "release: v0.14.7"
-git tag v0.14.7 && git push origin main --tags
+git commit -am "release: v0.15.0"
+git tag v0.15.0 && git push origin main --tags
 ```
 
-Pushing the `v*` tag triggers `.github/workflows/release.yml`, which creates the GitHub Release (and backfills any older version that still has none). It uses the built-in `GITHUB_TOKEN`, so no extra secret is needed.
+Pushing the `v*` tag triggers `.github/workflows/release.yml`: minor upgrades create the GitHub Release (and backfill any missing minor release); patch versions are skipped automatically. It uses the built-in `GITHUB_TOKEN`, so no extra secret is needed.
 
 > The tag must be pushed by the maintainer **before** the release runs: if GitHub creates a Release for a tag that does not exist yet, it points that tag at the default branch HEAD, so historical versions would end up on the wrong commit. The workflow therefore only creates releases — it never moves tags.
 

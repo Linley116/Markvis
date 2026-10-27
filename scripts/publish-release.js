@@ -1,14 +1,18 @@
 #!/usr/bin/env node
-// 发布 GitHub Release：把 scripts/versions.json 里的每个版本做成一条 Release，
-// 发布说明取自 CHANGELOG.md 对应小节。
+// 发布 GitHub Release：只有 minor 升级（v0.15、v0.16 这种大版本变化）才发 Release，
+// patch 版本（v0.15.1 这种）只打 tag，不发 Release —— 中间过程的变更内容
+// 由下一条大版本 Release 统一描述。
 //
-//   node scripts/publish-release.js               # 发布所有缺失的版本
-//   node scripts/publish-release.js v0.14.6       # 只发布指定版本
+//   node scripts/publish-release.js               # 补齐所有缺失的大版本 Release
+//   node scripts/publish-release.js v0.15.0       # 只发布指定版本
 //   node scripts/publish-release.js --dry-run     # 只打印将要做什么
 //
 // 前提：对应的 v* tag 必须已经推到远端（`git tag vX.Y.Z && git push origin --tags`）。
 // 脚本只建 Release、不碰 tag —— GitHub 在建 Release 时若发现 tag 不存在，会把 tag
-// 自动建到默认分支 HEAD，导致历史版本的 tag 指错提交。
+// 自动建到默认分支 HEAD，导致 tag 指错提交。
+//
+// 正文规则：一条 Release 覆盖「自上一条 Release 以来的全部变更」——
+// 从 versions.json 里上一个已有 Release 的版本之后，到当前版本为止的所有小节。
 //
 // 鉴权：环境变量 GITHUB_TOKEN（CI 里用 secrets.GITHUB_TOKEN / ${{ github.token }}）。
 // 幂等：已存在的 Release 会跳过，重复执行安全。
@@ -48,6 +52,11 @@ function compareVersions(a, b) {
     if (ka[i] !== kb[i]) return ka[i] - kb[i];
   }
   return 0;
+}
+
+function seriesOf(v) {
+  const p = v.slice(1).split('.');
+  return `${p[0]}.${p[1]}`;
 }
 
 function api(method, apiPath, body) {
@@ -123,20 +132,56 @@ function changelogSection(version) {
   return out.join('\n').trim();
 }
 
-async function releaseExists(version) {
-  const res = await apiWithRetry('GET', `/releases/tags/${version}`).catch(() => null);
-  return res && res.status === 200 ? res.data : null;
-}
-
 async function tagExists(version) {
   const res = await apiWithRetry('GET', `/git/ref/tags/${version}`).catch(() => null);
   return !!(res && res.status === 200);
 }
 
-async function publishOne(entry, isLatest) {
+/** 拉取全部已有 Release，返回 tag_name → release 映射（公开仓库无需 token） */
+async function listReleases() {
+  const map = {};
+  for (let page = 1; ; page += 1) {
+    const res = await apiWithRetry('GET', `/releases?per_page=100&page=${page}`);
+    const list = res.data || [];
+    list.forEach((r) => { map[r.tag_name] = r; });
+    if (list.length < 100) break;
+  }
+  return map;
+}
+
+/** 是否 minor 首版：versions.json 升序排列后，该 major.minor 组合的第一次出现 */
+function isSeriesHead(entry, all) {
+  const key = seriesOf(entry.version);
+  const first = all.find((e) => seriesOf(e.version) === key);
+  return first && first.version === entry.version;
+}
+
+/** 正文 = 自上一个已有 Release 的版本之后，到当前版本为止的所有小节（最新在最上） */
+function aggregateBody(entry, all, existing) {
+  const idx = all.indexOf(entry);
+  let prev = -1;
+  for (let j = idx - 1; j >= 0; j -= 1) {
+    if (existing[all[j].version]) { prev = j; break; }
+  }
+  const slices = [];
+  for (let j = idx; j > prev; j -= 1) {
+    const sec = changelogSection(all[j].version);
+    if (sec) slices.push(sec);
+  }
+  const footer = [
+    '---',
+    '',
+    `完整改动记录见 [CHANGELOG.md](https://github.com/${REPO}/blob/main/CHANGELOG.md)。`,
+    '',
+    '> 本项目仅以源码分发，不提供预编译或已公证的二进制；请按 [README](https://github.com/' + REPO + ') 自行构建。',
+  ].join('\n');
+  return `${slices.join('\n\n')}\n\n${footer}`;
+}
+
+async function publishSeries(entry, all, existing, isLatest) {
   const { version } = entry;
 
-  if (await releaseExists(version)) {
+  if (existing[version]) {
     console.log(`· ${version} 已存在 Release，跳过`);
     return false;
   }
@@ -146,18 +191,18 @@ async function publishOne(entry, isLatest) {
     throw new Error(`远端没有 tag ${version}，请先 git tag ${version} && git push origin ${version}`);
   }
 
-  const section = changelogSection(version);
-  const footer = [
-    '---',
-    '',
-    `完整改动记录见 [CHANGELOG.md](https://github.com/${REPO}/blob/main/CHANGELOG.md)。`,
-    '',
-    '> 本项目仅以源码分发，不提供预编译或已公证的二进制；请按 [README](https://github.com/' + REPO + ') 自行构建。',
-  ].join('\n');
-  const body = section ? `${section}\n\n${footer}` : footer;
+  const body = aggregateBody(entry, all, existing);
+  const covered = all.filter((e) => {
+    const idx = all.indexOf(entry);
+    let prev = -1;
+    for (let j = idx - 1; j >= 0; j -= 1) {
+      if (existing[all[j].version]) { prev = j; break; }
+    }
+    return all.indexOf(e) > prev && all.indexOf(e) <= idx;
+  }).map((e) => e.version);
 
   if (DRY_RUN) {
-    console.log(`· [dry-run] 将创建 Release ${version}（${body.length} 字符说明）`);
+    console.log(`· [dry-run] 将创建 Release ${version}，汇总 ${covered.join(', ')}（${body.length} 字符说明）`);
     return true;
   }
 
@@ -170,7 +215,7 @@ async function publishOne(entry, isLatest) {
       draft: false,
       make_latest: isLatest ? 'true' : 'false',
     }));
-    console.log(`✓ ${version} → ${res.data.html_url}`);
+    console.log(`✓ ${version} → ${res.data.html_url}（汇总：${covered.join(', ')}）`);
     return true;
   } catch (err) {
     // 并发运行时可能已有别的任务先建好同名 Release，忽略即可
@@ -190,20 +235,29 @@ async function main() {
 
   const only = process.argv.slice(2).filter((a) => /^v\d/.test(a));
   const all = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf8')).sort((a, b) => compareVersions(a.version, b.version));
-  const targets = only.length ? all.filter((e) => only.includes(e.version)) : all;
+  const existing = await listReleases();
 
-  if (!targets.length) {
-    console.error('没有匹配的版本');
-    process.exit(1);
+  // 只处理 minor 首版；patch 版本只打 tag，不发 Release
+  const heads = all.filter((e) => isSeriesHead(e, all));
+  let targets = heads;
+  if (only.length) {
+    targets = heads.filter((e) => only.includes(e.version));
+    const skipped = only.filter((v) => !targets.some((e) => e.version === v));
+    skipped.forEach((v) => console.log(`· ${v} 是 patch 版本，不单独发布 Release，跳过`));
   }
 
-  const newest = all[all.length - 1].version;
+  if (!targets.length) {
+    console.log('没有需要发布的大版本 Release');
+    return;
+  }
+
+  const newestHead = heads[heads.length - 1].version;
   const failures = [];
   let created = 0;
 
   for (const entry of targets) {
     try {
-      if (await publishOne(entry, entry.version === newest)) created += 1;
+      if (await publishSeries(entry, all, existing, entry.version === newestHead)) created += 1;
     } catch (err) {
       console.error(`✗ ${entry.version} 发布失败：${err.message}`);
       failures.push(`${entry.version}: ${err.message}`);
@@ -212,7 +266,7 @@ async function main() {
     await sleep(600);
   }
 
-  console.log(`完成：新建 ${created} 条 Release，共处理 ${targets.length} 个版本`);
+  console.log(`完成：新建 ${created} 条 Release，共处理 ${targets.length} 个大版本`);
   if (failures.length) {
     console.error(`失败 ${failures.length} 个版本：`);
     for (const f of failures) console.error(`  - ${f}`);
