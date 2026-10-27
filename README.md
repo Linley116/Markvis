@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#build)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-269%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-272%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
@@ -35,7 +35,7 @@ Typora on macOS is a native Cocoa shell that hosts a WKWebView. Markvis does the
 | Runtime | Chromium + Node | System WebKit |
 | Native bridge | IPC / preload | `WKScriptMessageHandler` + `prompt()` sync channel |
 
-The project is currently about 14,092 lines: 2,555 Swift, 6,262 web core, 2,549 features, and 2,726 tests.
+The project is currently about 14,222 lines: 2,555 Swift, 6,357 web core, 2,549 features, and 2,761 tests.
 
 ### Features
 
@@ -186,7 +186,7 @@ MARKVIS_NO_INSTALL=1 ./build.sh --keep   # build only, leave ~/Applications alon
 ### Tests
 
 ```bash
-node test/engine.test.js      # 138 assertions — core loop
+node test/engine.test.js      # 141 assertions — core loop
 node test/features.test.js    # 131 assertions — features
 ./test/native.sh                                       # native Swift tests
 node test/bench.js                                     # performance baseline

@@ -1000,8 +1000,43 @@ function check(name, cond, extra) {
         hb.data.indexOf('<div class="card"') === 0 && /after paragraph/.test(hb.md) && hb.after === 'after paragraph',
         JSON.stringify(hb.md.slice(0, 120)));
 
+  const detailsMd = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const src = '<details>\n<summary>历史说明</summary>\n' +
+      '- 主播目录和观看流程由 **LiveHub** 提供\n' +
+      '- 弹幕读取由 `server/danmaku/` 下的连接器实现\n' +
+      '- 登录 Cookie 只存本机\n</details>\n\n普通段落';
+    window.__loadContent('', src, 'details.md');
+    await wait(450);
+    const el = document.querySelector('[mdtype="html_block"]');
+    const frame = el && el.querySelector('iframe.md-html-frame');
+    return {
+      raw: el ? el.getAttribute('data-html') : '',
+      preview: frame ? frame.srcdoc : '',
+      md: window.__getMarkdown(),
+      exported: window.__buildExportHTML()
+    };
+  });
+  check('details 源码保持原样',
+        detailsMd.raw.includes('<summary>历史说明</summary>') &&
+        detailsMd.raw.includes('- 主播目录') && detailsMd.raw.includes('</details>') &&
+        detailsMd.md.includes('- 主播目录') && /普通段落/.test(detailsMd.md),
+        JSON.stringify(detailsMd.md.slice(0, 180)));
+  check('details 里的 Markdown 被解析',
+        /<details/.test(detailsMd.preview) && /<ul/.test(detailsMd.preview) &&
+        /<strong>LiveHub<\/strong>/.test(detailsMd.preview) &&
+        /<code>server\/danmaku\//.test(detailsMd.preview),
+        JSON.stringify(detailsMd.preview.slice(0, 240)));
+  check('导出/PDF 展开解析后的 details 内容',
+        /<details/.test(detailsMd.exported) && /<ul/.test(detailsMd.exported) &&
+        /<strong>LiveHub<\/strong>/.test(detailsMd.exported),
+        JSON.stringify(detailsMd.exported.slice(0, 240)));
+
   const hbEdit = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
+    // details 用例换了当前文档；编辑浮层测试重新加载普通 HTML 块
+    window.__loadContent('', '<div class="card" style="padding:6px"><strong>Hello</strong> HTML</div>', 'html-edit.md');
+    await wait(420);
     document.querySelector('.md-html-edit').click();
     await wait(80);
     const panel = document.getElementById('mf-math-editor');

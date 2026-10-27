@@ -1303,7 +1303,12 @@
       'img{max-width:100%;height:auto}a{color:' + accent + '}' +
       'table{border-collapse:collapse;max-width:100%}' +
       'pre{overflow:auto;white-space:pre-wrap}' +
+      'details{margin:.4em 0}summary{cursor:pointer;font-weight:500}' +
+      'details p{margin:.25em 0}ul,ol{padding-left:1.5em;margin:.25em 0}' +
       '*,*::before,*::after{box-sizing:border-box}';
+
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">' + base +
+      '<style>' + css + '</style></head><body>' + markdownizeDetails(raw, true) + '</body></html>';
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8">' + base +
       '<style>' + css + '</style></head><body>' + raw + '</body></html>';
@@ -3904,6 +3909,96 @@
     return null;
   }
 
+  /** details 内的 Markdown 行内标记转成普通 HTML，避免带进编辑器模型 */
+  function markdownPlainInline(nodes) {
+    return (nodes || []).map(function (n) {
+      switch (n.type) {
+        case 'strong': return '<strong>' + markdownPlainInline(n.children) + '</strong>';
+        case 'em': return '<em>' + markdownPlainInline(n.children) + '</em>';
+        case 'del': return '<del>' + markdownPlainInline(n.children) + '</del>';
+        case 'code': return '<code>' + escapeHtml(n.text) + '</code>';
+        case 'link':
+        case 'autolink':
+          return '<a href="' + escapeAttr(n.href) + '">' + markdownPlainInline(n.children) + '</a>';
+        case 'link_ref': {
+          var def = linkDefs[n.label];
+          var href = def ? def.href : '';
+          return '<a href="' + escapeAttr(href || '#') + '">' + markdownPlainInline(n.children) + '</a>';
+        }
+        case 'image':
+          return '<img src="' + escapeAttr(resolveImgSrc(n.src)) + '" alt="' + escapeAttr(n.alt || '') + '">';
+        case 'math': return escapeHtml('$' + (n.tex || '') + '$');
+        case 'fnref': return '<sup>' + escapeHtml('[' + n.label + ']') + '</sup>';
+        case 'break': return '<br>';
+        default: return escapeHtml(n.text || '');
+      }
+    }).join('');
+  }
+
+  /** details 内的 Markdown 块转成普通 HTML（details 不进编辑器模型，不保留 cid/mdtype） */
+  function markdownPlainBlocks(blocks) {
+    return (blocks || []).map(function (b) {
+      switch (b.type) {
+        case 'paragraph': return '<p>' + markdownPlainInline(b.inline) + '</p>';
+        case 'heading':
+          return '<h' + b.depth + '>' + markdownPlainInline(b.inline) + '</h' + b.depth + '>';
+        case 'hr': return '<hr>';
+        case 'fences': return '<pre><code>' + escapeHtml(b.text) + '</code></pre>';
+        case 'blockquote': return '<blockquote>' + markdownPlainBlocks(b.blocks) + '</blockquote>';
+        case 'list': {
+          var tag = b.ordered ? 'ol' : 'ul';
+          var open = b.ordered && b.start > 1 ? '<' + tag + ' start="' + b.start + '">' : '<' + tag + '>';
+          return open + b.items.map(function (it) {
+            return '<li>' + markdownPlainBlocks(it.blocks) + '</li>';
+          }).join('') + '</' + tag + '>';
+        }
+        default: return '';
+      }
+    }).join('');
+  }
+
+  /**
+   * `<details>` 里直接跟 Markdown 列表/标题时，浏览器只会把换行折叠成一段。
+   * 这里把 summary 后面的 Markdown 文本解析成普通 HTML，data-html 原样保留。
+   */
+  function markdownizeDetails(html, forceOpen) {
+    if (!/<details[\s>]/i.test(html)) return html;
+    var tpl = document.createElement('template');
+    tpl.innerHTML = String(html);
+    var details = tpl.content.querySelectorAll('details');
+    if (!details.length) return html;
+    var changed = false;
+
+    for (var i = 0; i < details.length; i++) {
+      var box = details[i];
+      var textNodes = [];
+      for (var j = 0; j < box.childNodes.length; j++) {
+        var node = box.childNodes[j];
+        if (node.nodeType === 3 && node.nodeValue.trim()) textNodes.push(node);
+      }
+      if (!textNodes.length) continue;
+
+      var md = textNodes.map(function (n) { return n.nodeValue; }).join('\n').trim();
+      if (!md) continue;
+      var looksMarkdown = /(^|\n)\s*(?:[-*+]|\d+[.)])\s/.test('\n' + md) ||
+        /(^|\n)\s*#{1,6}\s/.test('\n' + md) || /(^|\n)\s*>/.test('\n' + md) || /\n\n/.test(md);
+      if (!looksMarkdown) continue;
+
+      var rendered = markdownPlainBlocks(parseLines(md.replace(/\r\n?/g, '\n').split('\n')));
+      if (!rendered) continue;
+
+      var frag = document.createElement('template');
+      frag.innerHTML = rendered;
+      box.insertBefore(frag.content, textNodes[0]);
+      for (var k = textNodes.length - 1; k >= 0; k--) {
+        if (textNodes[k].parentNode) textNodes[k].parentNode.removeChild(textNodes[k]);
+      }
+      if (forceOpen && !box.hasAttribute('open')) box.setAttribute('open', '');
+      changed = true;
+    }
+    return changed ? tpl.innerHTML : html;
+  }
+
   /**
    * 导出/打印里的 HTML 块：拆掉 sandbox iframe，换成可排版的普通 DOM。
    * 同时移除脚本、内嵌页面、表单刷新和 on* / javascript: 属性。
@@ -3946,7 +4041,7 @@
   }
 
   function printableHTMLBlock(source) {
-    var html = sanitizedHTML(source.getAttribute('data-html') || '');
+    var html = markdownizeDetails(sanitizedHTML(source.getAttribute('data-html') || ''), true);
     var tpl = document.createElement('template');
     tpl.innerHTML = html;
 

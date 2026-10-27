@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black?logo=apple)](#构建从源码安装)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-orange?logo=swift)](Sources/)
-[![Tests](https://img.shields.io/badge/tests-269%20passing-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-272%20passing-brightgreen)](test/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · 简体中文
@@ -36,7 +36,7 @@ Typora 在 macOS 上是「原生 Cocoa 外壳 + WKWebView」，Markvis 也是：
 | 运行时 | Chromium + Node | 系统 WebKit |
 | 原生桥 | IPC / preload | `WKScriptMessageHandler` + `prompt()` 同步通道 |
 
-当前约 14,092 行：Swift 2,555 行、Web 内核 6,262 行、功能模块 2,549 行、测试 2,726 行。
+当前约 14,222 行：Swift 2,555 行、Web 内核 6,357 行、功能模块 2,549 行、测试 2,761 行。
 
 ### 功能
 
@@ -187,7 +187,7 @@ DMG 打包脚本 `release.sh` 仅保留给维护者在自己的机器上使用�
 ### 测试
 
 ```bash
-node test/engine.test.js      # 138 项 —— 核心闭环
+node test/engine.test.js      # 141 项 —— 核心闭环
 node test/features.test.js    # 131 项 —— 功能
 ./test/native.sh                                       # 原生 Swift 测试
 node test/bench.js                                     # 性能基准
