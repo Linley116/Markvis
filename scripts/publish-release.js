@@ -119,33 +119,35 @@ function changelogSection(version) {
   return out.join('\n').trim();
 }
 
-// 打 tag：一次 git push 推全部缺失的 tag，避免逐个走 API 触发 GitHub 的二次限流
-async function ensureTags(entries) {
-  const remote = new Set(
-    execFileSync('git', ['ls-remote', '--tags', 'origin'], { cwd: ROOT, encoding: 'utf8' })
-      .split('\n')
-      .map((line) => line.split('refs/tags/')[1])
-      .filter(Boolean)
-      .map((name) => name.replace(/\^\{\}$/, ''))
-  );
+// tag 对齐：确保远端 tag 指向 versions.json 里记录的提交。
+// GitHub 在创建 Release 时若发现 tag 不存在，会自动把 tag 建到默认分支 HEAD；
+// 所以这里必须先把 tag 校准，再建 Release。
+async function reconcileTag(entry) {
+  const { version, commit } = entry;
+  const expected = execFileSync('git', ['rev-parse', commit], { cwd: ROOT, encoding: 'utf8' }).trim();
 
-  const missing = [];
-  for (const entry of entries) {
-    if (remote.has(entry.version)) continue;
-    const full = execFileSync('git', ['rev-parse', entry.commit], { cwd: ROOT, encoding: 'utf8' }).trim();
-    if (!DRY_RUN) {
-      execFileSync('git', ['tag', '-f', entry.version, full], { cwd: ROOT, encoding: 'utf8' });
+  const ref = await apiWithRetry('GET', `/git/ref/tags/${version}`).catch(() => null);
+  if (ref && ref.status === 200) {
+    const obj = ref.data.object;
+    // 附注 tag 的 object 是 tag 对象，需要再解一层拿到提交
+    let sha = obj.sha;
+    if (obj.type === 'tag') {
+      const peeled = await apiWithRetry('GET', `/git/tags/${sha}`).catch(() => null);
+      if (peeled && peeled.status === 200) sha = peeled.data.object.sha;
     }
-    missing.push(entry.version);
+    if (sha === expected) return { changed: false, sha };
+
+    const res = await apiWithRetry('PATCH', `/git/refs/tags/${version}`, JSON.stringify({ sha: expected, force: true }));
+    console.log(`  · 校正 tag ${version} → ${expected.slice(0, 7)}`);
+    return { changed: true, sha: res.data.object.sha };
   }
 
-  if (!missing.length) return;
-  if (DRY_RUN) {
-    console.log(`· [dry-run] 将推送 ${missing.length} 个 tag：${missing.join(', ')}`);
-    return;
-  }
-  console.log(`· 推送 ${missing.length} 个 tag：${missing.join(', ')}`);
-  execFileSync('git', ['push', 'origin', '--tags'], { cwd: ROOT, encoding: 'utf8' });
+  const res = await apiWithRetry('POST', '/git/refs', JSON.stringify({
+    ref: `refs/tags/${version}`,
+    sha: expected,
+  }));
+  console.log(`  · 创建 tag ${version} → ${expected.slice(0, 7)}`);
+  return { changed: true, sha: res.data.object.sha };
 }
 
 async function releaseExists(version) {
@@ -155,6 +157,12 @@ async function releaseExists(version) {
 
 async function publishOne(entry, isLatest) {
   const { version } = entry;
+
+  // 先把 tag 校准到版本提交，再建 Release。
+  // GitHub 在建 Release 时若发现 tag 不存在，会把 tag 自动建到默认分支 HEAD；
+  // 所以这一步必须先做，否则历史版本的 tag 会指错提交。
+  await reconcileTag(entry);
+
   const existing = await releaseExists(version);
   if (existing) {
     console.log(`· ${version} 已存在 Release，跳过`);
@@ -215,14 +223,6 @@ async function main() {
   const newest = all[all.length - 1].version;
   const failures = [];
   let created = 0;
-
-  // 先把所有缺失的 tag 一次性推上去（一次 push，避免逐个调 API 触发二次限流）
-  try {
-    await ensureTags(targets);
-  } catch (err) {
-    console.error(`✗ 推送 tag 失败：${err.message}`);
-    failures.push(`tag push: ${err.message}`);
-  }
 
   for (const entry of targets) {
     try {
